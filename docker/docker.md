@@ -99,9 +99,26 @@ Donde:
   * `-i` (interactivo): mantiene abierta una conexión de entrada estandar (STDIN) aunque el contenedor no esté conectado a una terminal.
   * `-it` (interactivo y terminal): combina las opciones `-i` y `-t`, por lo que al crear el contendor la terminal queda conectada al contenedor y el comando especificado en la instrucción `CMD` del Dockerfile se ejecuta. Al desconectar la terminal del contenedor, si no se queda ningún proceso corriendo en el contenedor entonces este se detendrá automáticamente.
 
-## Manejo de redes en contenedores
+## Redes
+
+Al instalar Docker, se creará una red virtual tipo bridge llamada `bridge`. Podemos ver la lista de redes que tiene docker con el siguiente comando:
+```powershell
+docker network ls
+```
+Donde en una instalación limpra de Docker, deberían estar 3 redes:
+* `bridge`: de tipo bridge, es un puente intermediario entre la red del host y la red del contenedor, dicho puente se encarga de interconectar todas las interfaces que están conectadas a esta. Maneja sus propias IP ya que  todas las interfaces conectadas al puente están aisladas de la red del host. Cada contenedor conectado a esta red tendrá asignado su propia interfaz e IP. Todos los contenedores conectados a esta red pueden interactuar entre ellos directamente usando sus nombres o sus IP asignadas.
+* `host`: 
+ la cual podemos ver  llamada `docker0`, la cual podemos ver cone el siguiente comando en Ubuntu:
+```powershell
+ip address show
+```
 
 
+
+Cuando creamos un contenedor, Docker crea una Intefaz Ethernet Virtual asignada a dicho contenedor, la cual podemos ver con el mismo comando `ip address show`. Dicha red virtual será conectada a un un switch que dependerá del tipo de red que le hayamos asignado al contenedor, por defecto 
+
+
+Ver cuales 
 
 ## Administrar un contenedor
 
@@ -158,4 +175,5 @@ docker rm <nombre_o_ID>
 Eliminar una imagen (no tiene que tener contenedores existentes):
 ```powershell
 docker image rm <nombre_o_ID>
+docker rmi <nombre_o_ID>
 ```
