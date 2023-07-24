@@ -141,6 +141,17 @@ Opciones:
 * `-f, --force`: por defecto se nos pedirá confirmación, al usar esta opción no se pedirá confirmación.
 * `-a, --all`: por defecto solo se eliminan las imágenes sin nombre, al usar este comando se eliminarán también las imágenes que no tengan ningún contenedor asignado.
 
+Podemos escanear las imágenes para buscar vulnerabilidades de una base de datos en linea desde un servicio llamado `snyk`. Necesitamos tener cuenta en Docker-hub y además estar logeados:
+* Para logearnos desde la terminal:
+  ```powershell
+  docker login
+  ```
+* Para escanear:
+  ```powershell
+  docker scan [OPTIONS] <image_name>
+  ```
+NOTA: Podemos escanear incluso las imágenes que están en Docker-hub, como las imágenes base que queremos usar.
+
 ## Administrar contenedores
 
 Una vez un creado un contenedor, podemos manejarlo con los siguientes comandos:

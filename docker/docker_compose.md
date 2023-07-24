@@ -47,10 +47,8 @@ Un archivo compose se define mediante un archivo de tipo `yml`, usualmente `"doc
   ```
 * ```yml
   services:
-    <nombre_servicio_1>: # por defecto este será el hostname del contenedor en las redes,
-    # si queremos asignar otro hostname, tenemos que usar la configuración `hostname`
-      hostname: # para especificar un hostname distinto al nombre del servicio
-      build: # Si solo vamos a usar el dockerfile podemos especificar aquí la ruta 
+    <nombre_servicio_1>:
+      build: # Si solo vamos a usar un dockerfile podemos especificar aquí la ruta 
       # donde se encuentra que será usada como directorio de contexto, pero si vamos 
       # a necesitar más configuraciones entonces tenemos que desglosarlas dentro 
       # como se muestra a continuación.
@@ -68,6 +66,9 @@ Un archivo compose se define mediante un archivo de tipo `yml`, usualmente `"doc
       container_name: # nombre que se le asignará al contenedor, por defecto se le
       # asignará el nombre <directorio_raiz>_<nombre_servicio>_<numero>. Donde el 
       # número parece ser un consecutivo que comienza desde 1.
+      hostname: # Asignar un hostname para el contenedor, por defecto se le asigna
+      # el ID del contenedor. Podemos consultar el hostname entrando al contenedor
+      # y revisando la variable de entorno HOSTNAME, ej. en linux: `echo $HOSTNAME`.
       ports: # Mapeo de puertos
         - [<ip_host>:]<puerto_host>:<puerto_contenedor>
         ...
