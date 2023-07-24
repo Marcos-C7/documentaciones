@@ -120,7 +120,28 @@ Cuando creamos un contenedor, Docker crea una Intefaz Ethernet Virtual asignada 
 
 Ver cuales 
 
-## Administrar un contenedor
+## Administrar imágenes
+
+Para revisar la lista de imágenes creadas usamos el siguiente comando que nos mostrará las imágenes y sus propiedades:
+```powershell
+docker images
+```
+
+Para eliminar una imagen primero tenemos que asegurarnos de que no tiene contenedores existentes, y entonces podemos ejecutar alguno de los siguientes comandos:
+```powershell
+docker image rm <imagen>
+docker rmi <imagen>
+```
+
+Suele ocurrir que cuando volvemos a construir una imágen, la antigua no se elimna sino que solo se le quita el nombre y el ID pero sigue existiendo, y eso hace que terminemos con una larga lista de imágenes sin nombre (`dangling images`). Para eliminar todas las imágenes colgantes, usamos el siguiente comando:
+```powershell
+docker image prune [OPCIONES]
+```
+Opciones:
+* `-f, --force`: por defecto se nos pedirá confirmación, al usar esta opción no se pedirá confirmación.
+* `-a, --all`: por defecto solo se eliminan las imágenes sin nombre, al usar este comando se eliminarán también las imágenes que no tengan ningún contenedor asignado.
+
+## Administrar contenedores
 
 Una vez un creado un contenedor, podemos manejarlo con los siguientes comandos:
 * `docker stop <contenedor>`: para detener un contenedor.
@@ -128,12 +149,16 @@ Una vez un creado un contenedor, podemos manejarlo con los siguientes comandos:
 * `docker restart <contenedor>`:
 * `docker rm <contenedor>`: para eliminar un contenedor que esté detenido.
 
+
+Salir de un contedor en modo consola:
+```powershell
+exit
+```
+
+## Administrar volúmenes
+
 ## Comandos
 
-Mostrar la imágenes que han sido creadas:
-```powershell
-docker images
-```
 
 Mostrar los contenedores que etán corriendo:
 ```powershell
@@ -147,10 +172,6 @@ docker exec -it <nombre_o_ID> <consola>
 * `<nombre_o_ID>`: nombre o ID del contedor, que puede ser consultado con le comando `docker ps`.
 * `<consola>`: nombre de la consola a usar, depende del sistema operativo del contenedor, unos usan `powershell`, otros `sh`, etc.
 
-Salir de un contedor en modo consola:
-```powershell
-exit
-```
 
 Para detener un contenedor:
 ```powershell
@@ -172,8 +193,3 @@ Eliminar un contenedor (tuvo que haber sido detenido previamente):
 docker rm <nombre_o_ID>
 ```
 
-Eliminar una imagen (no tiene que tener contenedores existentes):
-```powershell
-docker image rm <nombre_o_ID>
-docker rmi <nombre_o_ID>
-```
