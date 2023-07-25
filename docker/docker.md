@@ -77,7 +77,7 @@ Donde:
 * imagen: es el nombre[:tag] o el ID de la imagen. El tag es opcional ya que suele ser usado para manejar varias versiones de una misma imagen.
 * `OPCIONES` más usadas:
   * `--name`: para asignar un nombre al contenedor, ej. `--name mi_contenedor`.
-  * `-p, --publish`: publica o mapea puertos en el host del contenedor en formato `puerto_host:puerto_contenedor`, ej. `-p 8080:8000`.
+  * `-p, --publish`: publica o mapea puertos en el host del contenedor en formato `[ip:]puerto_host:puerto_contenedor` donde la IP es opcional, ej. `-p 8080:8000` o `-p 127.0.0.1:8080:8000`. Creo que podemos usar la IP de cualquier máquina a la que le queramos dar acceso al puerto del contenedor. Podemos mapear tantos puertos como queramos usando varias veces la opción `-p`, ej. `-p 8080:8000 -p 3036:3036`.
     * Importante: Si solo especificamos el puerto, entonces dicho puerto queda accesible para todo el mundo, lo cual es inseguro. Lo mejor es especificar la IP local para que solo el host tenga acceso al puerto del contenedor, ej. `-p 127.0.0.1:8080:8000`.
   * `-v, --volume`: monta un directorio o archivo desde el host al contenedor con el formato `ruta/host:ruta/contenedor`. La ruta del contenedor debe ser absoluta.
   * `--rm`: eliminar el contenedor automáticamente cuando sea detenido.
@@ -101,13 +101,15 @@ Donde:
 
 ## Redes
 
-Al instalar Docker, se creará una red virtual tipo bridge llamada `bridge`. Podemos ver la lista de redes que tiene docker con el siguiente comando:
+Al instalar Docker, se crearán algunas redes virtuales, podemos ver la lista de redes que tiene docker con el siguiente comando:
 ```powershell
 docker network ls
 ```
-Donde en una instalación limpra de Docker, deberían estar 3 redes:
-* `bridge`: de tipo bridge, es un puente intermediario entre la red del host y la red del contenedor, dicho puente se encarga de interconectar todas las interfaces que están conectadas a esta. Maneja sus propias IP ya que  todas las interfaces conectadas al puente están aisladas de la red del host. Cada contenedor conectado a esta red tendrá asignado su propia interfaz e IP. Todos los contenedores conectados a esta red pueden interactuar entre ellos directamente usando sus nombres o sus IP asignadas.
-* `host`: 
+Donde en una instalación limpia de Docker, deberían estar las siguientes 3 redes:
+* `bridge`: de tipo bridge, es un puente intermediario entre la red del host y los contenedores que se conecten a dicha red `bridge`. Dicho puente se encarga de interconectar todas las interfaces de los contenedores que sean conectados a `bridge`. Maneja sus propias IP ya que todas las interfaces conectadas al puente están aisladas de la red del host. Cada contenedor conectado a esta red tendrá asignada su propia interfaz e IP. Todos los contenedores conectados a esta red pueden interactuar entre ellos directamente usando sus nombres o sus IP asignadas. Los contenedores que no se les asigne una red, por defecto serán conectados a `bridge`. Podemos exponer puertos de la red del contenedor a la red del host con la opción `-p` al ejecutar el comando `docker run`. En esta red cada contenedor tiene su espacio de nombres de red.
+* `host`: un contenedor conectado a esta red comparte el espacio de nombres con el host, es decir, el contenedor usa directamente la red del host y por lo tanto no obtiene una interfaz ni IP únicas, sino que comparte las mismas que el host. El contenedor puede acceder directamente a servicios que estén corriendo en el host, usando la misma IP y puertos que el host. Es útil cuando queremos evitar la sobrecarga del Network Address Translation (NAT) o cuando queremos acceder a servicios que están accesibles en la red desde el host. En resumen, en la red `host`, no hay diferencia entre el host y el contenedor, en términos de la red.
+* `none`:
+
  la cual podemos ver  llamada `docker0`, la cual podemos ver cone el siguiente comando en Ubuntu:
 ```powershell
 ip address show
