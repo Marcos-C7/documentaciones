@@ -5,7 +5,7 @@ Minecraft Mods (actualizado a Jul/2024)
 En Minecraft, podemos instalar mods pero solo en la versión de Java. En este documento documentaré lo aprendido respecto a este tema.
 
 
-#### Mods Loaders
+### Mods Loaders
 
 Por sí solo, Minecraft no soporta mods, para que esto sea posible la comunidad ha desarrollado distintos Mods Loaders (cargadores de mods). Cada uno tiene su propia API de integración y por lo tanto un mod solo puede funcionar en un Loader si se realizó la adaptación correspondiente. Los dos principales Loaders que dominan el escenario son:
 
@@ -33,7 +33,7 @@ Una vez en el modo de edición, hacemos clic en `MAS OPCIONES` y en el campo `AR
 </div>
 
 
-#### Mods
+### Mods
 
 Una vez instalado un Mod Loader, podemos instalar mods implementados para dicho loader. Esto es tan sencillo como descargar el archivo `jar` del mod y ponerlo en la carpeta `mods` de minecraft, que suele estar en `"C:\Users\<usuario>\AppData\Roaming\.minecraft"`. 
 
@@ -45,7 +45,7 @@ Hay varios lugares desde donde descargar mods, pero lo más reconocidos son los 
 * [curseforge](https://www.curseforge.com/minecraft/search?page=1&pageSize=20&sortBy=relevancy): una plataforma que parece ser que en un principio estaba enfocada en el Loader Forge, pero que ahora es genera para todos los Loaders. No se siente tan bien diseñada como `modrinth`.
 
 
-#### Shaders
+### Shaders
 
 Los Shaders son una especie de Mods, aunque no se les denomina así, los cuales están encargados de cambiar completamente el apartado visual de Minecraft. Existe gran variedad de shaders que van desde simples y caricaturescos hasta realistas.
 
@@ -61,7 +61,7 @@ Una vez instalado el mod que corresponda a los shaders, ya podremos integrar sha
 
 En este caso ocurre lo mismo que con los mods, que esta carpeta se usa siempre aunque cambiemos de perfil, por lo que tendríamos que tener una carpeta para cada perfil de mods y cambiar el nombre de la carpeta cada que vayamos a cargar un perfil diferente, por lo que recomiendo mejor usar el manejador de Modpacks `Curseforge`.
 
-#### Consideraciones:
+### Consideraciones:
 
 * Los mods, los shaders, los loaders y el Minecraft mismo tienen una dependencia muy fuerte que no termina de resolverse de manera correcta en ningún lado, sin mencionar la compatibilidad entre mods.
 * Uno mismo tiene que revisar manualmente qué mods quedan con qué versión de Minecraft y, en el caso de Forge, a veces del Loader.
