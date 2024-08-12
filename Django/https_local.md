@@ -16,6 +16,7 @@ Para esto podemos usar la herramienta openssl con los siguientes comandos:
 openssl genrsa -out certificate.key 2048
 
 # Generamos la solicitud de firma de certificado (Certificate Signing Request o CSR)
+# Yo no definí ninguna contraseña durante el llenado del formulario y funcionó bien
 openssl req -new -key certificate.key -out certificate.csr
 
 # Nosotros mismos firmamos el certificado el cual generamos en el archivo 'certificate.crt'
