@@ -19,8 +19,8 @@ Kubernetes es un sistema open-source de oquestación de contenedores Docker para
     * **Controller Manager** (`kube-controller-manager`): se encarga de la ejecución y administración de los controladores, los cuales se encargan de mantener el cluster en el estado deseado. Algunos de los controladores son:
         * **Controlador de replicación**: cada deployment debe tener un `ReplicaSet` que almacena cuantas replicas se desean y cuantas existen, este controlador se encarga de que ambos números coincidan, si falta o muere alguno levanta nuevos y si hay de más los elimina. Esto convierte a Kubernetes en auto-reparable.
         * **Controlador de nodos**: vigila la salud de los nodos y si alguno deja de responder reasigna sus Pods a otros nodos.
-        * **Controlador de deployment**: gestiona los deployments, actualiza los `ReplicaSet`.
-            * **Depoloyment**: <span style="color:red;">FALTA DESCRIBIR ESTA PARTE</span>
+        * **Controlador de deployment**: gestiona los deployments, creándoles o actualizándoles su `ReplicaSet` el cual se encargará de crear las réplicas de los Pods.
+            * **Depoloyment**: es la descripción de una aplicación, qué imágen va a usar, cuantas réplicas quieres corriendo, etc. Tú la describes y kubernetes se encarga de mantenerla, acualizarla y repararla recreando pods muertos, entre otras cosas.
         * **Controlador de servicios**: gestiona los servicios y configura balanceadores de carga.
             * **Servicio**: para que un Pod sea accesible desde el exterior se tiene que exponer mediante un servicio, el cual agrupa bajo una IP a uno o más Pods de un deployment. De esta forma, podemos tener 3 pods de un deployment levantados con IP diferentes y agruparlos bajo una misma IP de un servicio que se encargue de reenviar las solicitudes hacia las IPs de los pods.
 
@@ -80,10 +80,335 @@ Kubernetes tiene una API tipo REST via HTTP llamada `API Server` (`kube-apiserve
 
 En nuestro caso usaremos `kubectl` pero no debería ser difícil implementar automatizaciones mediante las librerías de los lenguajes mencionados anteriormente.
 
+
+## Flujos de trabajo
+
+A continiuación se organizan flujos básicos de trabajo para desarrollar alguna actividad de principio a fin:
+
+* Crear un deployment en base a una imagen, exponerlo, levantarlo, revisarlo:
+    ```bash
+    # Crear el deployment (esto creará y pondrá a correr los Pods, aunque no estarán expuestos al exterior)
+    kubectl create deployment <deploy-name> --image=<image-name> --replicas=<num-replicas>
+    # Crear un servicio para exponer el deployment, tendrá el mismo nombre que el deploy (esto solo expondrá los Pods del deployment bajo una IP ya que los Pods ya están corriendo, además el servicio solo se creará pero no será levantado)
+    kubectl expose deployment <deploy-name> --type=NodePort --port=<port>
+    # Levantar el servicio (en la terminal se mostrará la URL), de preferencia correrlo en otra consola ya que queda bloqueada (con esto ya podemos acceder a la app del deployment desede el exterior)
+    minikube service <service-name> --url
+
+    # Revisar el estado de todos los recursos existentes (pods, servicios, deployments, replicasets, etc)
+    kubectl get all
+    # Revisar el estado de los deployments existentes
+    kubectl get deployments
+    # Revisar el estado de los ReplicaSets del deployment
+    kubectl get replicaset -l app=<deploy-name>
+    # Revisar el estado de los pods del deployment
+    kubectl get pods -l app=<deploy-name>
+    # Revisar el estado de los servicios del deployment
+    kubectl get services -l app=<deploy-name>
+    # Ver las IPs de los Pods del servicio
+    kubectl get endpoints <service-name>
+    ```
+* Realizar limpieza completa de un deployment:
+    ```bash
+    # Ver qué existe
+    kubectl get all
+
+    # Eliminar Deployment y Service
+    kubectl delete deployment mi-app
+    kubectl delete service mi-app
+
+    # Verificar que se eliminó todo
+    kubectl get all
+
+    # Si quedó algo huérfano
+    kubectl delete pod <nombre-pod> --grace-period=0 --force
+    ```
+* Eliminar un deployment por etiqueta (más eficiente):
+    ```bash
+    # Si todos los recursos tienen el mismo label
+    kubectl delete all -l app=<deploy-name>
+    ```
+* Eliminar deployments por archivo YAML:
+    ```bash
+    # Si creaste tus recursos con: kubectl apply -f <file>.yaml:
+    kubectl delete -f <file>.yaml
+    ```
+* Eliminar todo lo de un namespace:
+    ```bash
+    # ⚠️ CUIDADO: Borra TODO en el namespace actual
+    kubectl delete all --all
+    # O para borrar todo en un namespace específico
+    kubectl delete namespace <namespace-name>
+    ```
+
+### Flujo de ejecución de los procesos de eliminación
+
+A continuación se describe lo que ocurre internamente al eliminar algún recurso.
+
+Eliminar un Deployment:
+* **Comando**: `kubectl delete deployment <deploy-name>`
+* **Consecuencias**: se elimina el deployment, su ReplicaSet, todos sus Pods, pero no el servicio ni los configMaps/Secrets.
+
+Eliminar un Service:
+* **Comando**: `kubectl delete service <deploy-name>`
+* **Consecuencias**: elimina el service, los endpoints asociados las iptables del kube-proxy, pero no se eliminan los Pods (siguen corriendo pero sin exposición hacia el exterior).
+
+Eliminar un Pod:
+* **Comando**: `kubectl delete pod <pod-name>`
+* **Consecuencias**: se elimina el Pod, pero el ReplicaSet detecta que falta un Pod y lo crea nuevamente con otra IP actualizando el enrutamiento en las iptables del kube-proxy.
+
+### Actualización en vivo
+
+Una funcionalidad de Kubernetes muy importante es que permite realizar actualizaciones a los deployments en vivo sin tener que apagarlas o reiniciarlas manualmente, solo le indicas el cambio que quieres y Kubernetes lo realiza de la manera más adecuada y automáticamente. Algunos ejemplos son los siguientes:
+
+
+* Cambiar el número de replicas de la aplicación:
+    * Comando: `kubectl scale deployment <deploy-name> --replicas=<nuevas-replicas>`
+    * Ejmplo: `kubectl scale deployment mi-app --replicas=5`
+    * Descripción: le estamos indicando a Kubernetes que la app correspondiente al deployment `mi-app` se ajuste para que corra `5` réplicas.
+    * Acciones: Kubernetes actualizará la cantidad en el ReplicaSet correspondiente para que este elimine o genere nuevas réplicas y las conecte a la iptable del Kube-Proxy para que este balancee la carga considerando las nuevas réplicas.
+* Actualizar la versión de la imagen de la aplicación sin apagarla:
+    * Comando: `kubectl set image <resource-type>/<resource-name> <container-name>=<nueva imagen>`
+    * Ejemplo: `kubectl set image deployment/my-app nginx=nginx:1.23.4`
+    * Descripción: le estamos indicando a kubernetes que cambie la iamgen de un recurso tipo `deployment`, cuyo nombre es `mi-app`, y que la imagen usada por el contenedor llamado `nginx` sea cambiada por la imagen llamada `nginx:1.23.4` manteniendo el mismo nombre del contenedor que es `nginx`. Podemos especificar múltiples cambios `<container-name>=<nueva imagen>`.
+    * Acciones: Kubernetes crea los un nuevo ReplicaSet con la nueva imágen el cual crea Pods con la nueva versión. El anterior ReplicaSet queda en `0` para poder deshacer el cambio.
+* Regresar a una versión anterior si los últimos cambios aplicados están fallando:
+    * **Comando**: `kubectl rollout undo <resource-type>/<resource-name>`
+    * **Ejemplo**: `kubectl rollout undo deployment/mi-app`
+    * **Descripción**: estamos indicando que queremos deshacer los últimos cambios del recurso tipo `deployment` con nombre `mi-app`.
+    * **Acciones**: Kubernetes realiza los cambios gradualmente sin interrumplir el funcionamiento. 
+
+### Modelo de comunicación imperativo y declarativo
+
+Hay dos formas e indicarle a Kubernetes qué hacer:
+
+* **Modelo imperativo**: es mediante comandos con `kubectl` como `kubectl describe pod <nombre>`, le dices que hacer paso por paso.
+* **Modelo declarativo**: es mediante un archivo **YAML** como el siguiente, en este le describes el estado final al que quieres que lleguen tus deployments, tomando en cuenta pods, deployments, etc, y Kubernetes calcula los pasos para llegar ahí desde el estado actual.
+  ```yaml
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+  name: mi-nginx
+  spec:
+  replicas: 2
+  selector:
+    matchLabels:
+    app: nginx
+  template:
+    metadata:
+    labels:
+      app: nginx
+    spec:
+    containers:
+    - name: nginx
+      image: nginx
+      ports:
+      - containerPort: 80
+  ```
+
+
+El modo preferido es el declarativo que es mediante archivos YAML, ya que es más predecible y además versionable con herramientas como Git.
+
+## Estrucrura del archivo YAML
+
+A continuación revisaremos ejemplos de algunas configuraciones que se pueden especificar en un archivo YAML para crear un recurso, en este caso un Pod. Se revisarán las configuraciones gradualmente solo manteniendo en cada ejemplo las nuevas configuraciones junto con sus ancestros para no perder la estructura.
+
+Reglas del formato YAML:
+* YAML usa espacios, no tabulaciones.
+* Cada nivel de identación es de 2 espacios, no de 4.
+
+#### Ejemplo básico para crear un Pod:
+
+```yaml
+# Archivo YAML
+apiVersion: v1 # versión de la API de Kubernetes -> v1 (usado para Pods) o apps/v1 (para Deployments, StatefulSets, etc), se supone que cada tipo de recurso puede usar ciertas versiones
+kind: Pod # tipo de recurso -> Pod, Deployment, Service, ConfigMap, Secret, etc.
+metadata: # información del recurso
+  name: mi-primer-pod # nombre del recurso
+spec: # especificación del recurso
+  containers: # lista de contenedores que correrán dentro del Pod (en este caso solo 1)
+  - name: nginx # nombre que tendrá el contenedor
+    image: nginx # imágen de Docker que usará el contenedor
+```
+
+#### Más configuraciones para los metadatos
+
+```yaml
+metadata:
+  namespace: default # namespace para organizar los recursos creados y poder manejarlos en grupo, el valor por defecto es `default`
+  labels: # etiquetas para organizar y manejar en sub-grupos dentro del namespace, podemos inventar las que queramos
+    app: mi-aplicacion
+    tier: frontend
+    version: v1
+  annotations: # metadatos para documentar el recurso, podemos inventar las que queramos
+    description: "Pod de prueba"
+    createdBy: "juan"
+```
+
+#### Más configuraciones para puertos y ejecución de los contenedores:
+
+```yaml
+spec:
+  containers:
+  - name: nginx
+    ports: # lista de puertos que el contenedor expone, no abre puertos, es para que los Services sepan como a qué puerto mapear
+    - containerPort: 80 # puerto en el que estará escuchando el contenedor
+      name: http # nombre descriptivo del puerto (opcional)
+      protocol: TCP # protocolo, puede ser TCP o UDP
+    env: # lista de variables de entorno para el contenedor
+    - name: ENVIRONMENT # nombre de la variable
+      value: "production" # valor de la variable
+    - name: MAX_CONNECTIONS
+      value: "100"
+    command: ["nginx"] # comando a ejecutar (sobreescribe al ENTRYPOINT de la imagen)
+    args: ["-g", "daemon off;"] # argumentos para el comando (sobreescribe CMD de la imagen)
+```
+
+#### Más configuraciones para recursos del sistema para el contenedor
+
+```yaml
+spec:
+  containers:
+  - name: nginx
+    resources: # requerimientos de recursos para el contenedor
+      requests: # Recursos MINIMOS (el scheduler usa esto para decidir en qué nodo colocar el Pod)
+        memory: "128Mi" # unidades de memoria (M=Megabytes, Mi=Mebibytes, G=Gigabyte, Gi=Gibibyte)
+        cpu: "250m" # unidades de CPU (1=un CPU completo, 500m=500 milicores=0.5CPU)
+      limits:
+        memory: "256Mi"
+        cpu: "500m"
+```
+
+#### Configuraciones para prueba de vida de los contenedores
+
+```yaml
+spec:
+  containers:
+  - name: nginx
+    livenessProbe: # configuraciones para revisar si el contenedor sigue vivo, si falla se recrea el contenedor
+      httpGet:
+        path: / # ruta a donde se hará la petición de la prueba
+        port: 80
+        httpHeaders: # podemos agregar las cabeceras que queramos a la petición http
+        - name: Custom-Header
+          value: "value"
+      initialDelaySeconds: 10 # Espera antes de empezar
+      periodSeconds: 5 # Cada cuánto verifica
+      timeoutSeconds: 2 # Timeout de la verificación
+      failureThreshold: 3 # Fallos antes de reiniciar
+    readinessProbe: # configuraciones para revisar si el contenedor está listo par recibir tráfico, si falla se deja de mandar tráfico pero no se recrea el contenedor
+      #...configuraciones similares a `livenessProbe`
+    startupProbe: # configuraciones para revisar si el contenedor inició correctament, deshabilita livenessProbe y readinessProbe hasta que esta prueba pase, si falla se recrea el contenedor.
+      #...configuraciones similares a `livenessProbe`
+```
+
+#### Configuraciones para volúmenes básicos
+
+```yaml
+spec:
+  containers:
+  - name: nginx
+    volumeMounts: # Dónde montar volúmenes en el contenedor
+    - name: cache # nombre del volumen a montar (definidos más abajo)
+      mountPath: /usr/share/nginx/cache # ruta del volumen dentro del conenedor
+    - name: config
+      mountPath: /etc/nginx/conf.d
+      readOnly: true
+  volumes: # Definición de los volúmenes
+  - name: cache # nombre del volumen
+    emptyDir: {} # directorio vacío temporal, creado cuando el Pod inicia y es compartido entre los contenedores del Pod, se elimina cuando el Pod muere.
+  - name: docker-socket
+    hostPath: # Monta un directorio para el nodo (⚠️ Peligroso en producción)
+      path: /var/run/docker.sock
+  - name: config 
+    configMap: # Monta un ConfigMap como archivos
+      name: nginx-config
+  - name: credentials
+    secret: # Monta un Secret como archivos
+      secretName: db-credentials
+  - name: data # Monta almacenamiento persistente (Persistent Volume Claim)
+    persistentVolumeClaim:
+      claimName: mi-pvc
+```
+
+#### Ejemplo de YAML para un Deployment
+
+Ahora en lugar de definir un Pod, definiremos la estructura de un Deployment, comenzaremos con algo básico. Obviamente la mayoría de las configuraciones son opcionales.
+
+```yaml
+apiVersion: apps/v1 # versión usada para deployments
+kind: Deployment # tipo de recurso
+metadata:
+  name: mi-deployment
+  labels:
+    app: mi-app
+spec:
+  replicas: 3 # número de réplicas de la aplicación
+  selector: # para indicar cuales Pods gestionará este Deployment
+    matchLabels: # los pods que conincidan en todas estas etiquetas pertenecerán a este Deployment
+      app: mi-app
+  strategy: # Estrategia de actualización
+    type: RollingUpdate # RollingUpdate es la estrategia por defecto para aplicar actualizaciones gradualmente, pero también está `Recreate` para aplicar actualizaciones a todo de golpe
+    rollingUpdate:
+      maxUnavailable: 1 # Máximo de Pods caídos antes de recrearlos, puede ser en cantidad o en porcentaje (25%)
+      maxSurge: 1 # Máximo de Pods extras antes de eliminar los excedentes
+  template: # Plantilla del Pod, todo lo que vimos para la creación de un Pod va en esta sección
+    metadata:
+      labels:
+        app: mi-app # IMPORTANTE: DEBE coincidir con la etiqueta definida en selector, no se integra automáticamente porque los Pods pueden crearse por separado, el deploy tomará todos los Pods que tengan la misma etiqueta y los tomará como parte de sí
+    spec: # Spec del Pod (todo lo que aprendimos de la creación de Pods)
+      containers:
+      - name: nginx
+        image: nginx:1.19
+        ports:
+        - containerPort: 80
+```
+
+#### Ejemplo de YAML para un Service
+
+Ahora veremos un ejemplo para definir un Service en un archivo YAML, también las mayoría de las configuraciones son opcionales.
+
+```yaml
+apiVersion: v1 # versión para Services
+kind: Service
+metadata:
+  name: mi-service
+spec:
+  type: NodePort # Tipo de Service, también hay `ClusterIP`, `LoadBalancer`, `ExternalName`.
+  selector: # Qué Pods incluir en el servicio
+    app: mi-app
+  ports:
+  - port: 80 # Puerto del Service
+    targetPort: 80 # Puerto del contenedor
+    nodePort: 30080 # Puerto en el nodo (30000-32767)
+    protocol: TCP
+    name: http
+```
+
+#### Instrucciones para validar un archivo YAML
+
+```bash
+# Validar sintaxis sin crear
+kubectl apply -f mi-archivo.yaml --dry-run=client
+
+# Ver qué se creará exactamente
+kubectl apply -f mi-archivo.yaml --dry-run=server -o yaml
+```
+
+#### Comandos para aplicar/desaplicar un archivo YAML al cluster
+
+```bash
+# Aplicar
+kubectl apply -f <file>.yaml:
+# Desaplicar
+kubectl delete -f <file>.yaml
+```
+
+
+# Glosario de comandos
+
 Algunos de los comandos básicos y principales son los siguientes:
 
 Información general:
-
 * `kubectl cluster-info`: revisar el estado del cluster.
 * `kubectl get all`: revisar el estado de todos los recursos.
 * `kubectl get nodes`: revisar el estado de los nodos.
@@ -137,114 +462,5 @@ Actualización:
 * `kubectl rollout pause deployment <deploy-name>`: pausa todas las actualizaciones pero sigue corriendo.
 * `kubectl rollout resume deployment <deploy-name>`: reanuda las actualizaciones.
 * `kubectl rollout history deployment <deploy-name>`: ver historial de cambios.
-
-## Flujos de trabajo
-
-A continiuación se organizan flujos básicos de trabajo para desarrollar alguna actividad de principio a fin:
-
-* Crear un deployment en base a una imagen, exponerlo, levantarlo, revisarlo:
-    ```bash
-    # Crear el deployment (esto creará y pondrá a correr los Pods, aunque no estarán expuestos al exterior)
-    kubectl create deployment <deploy-name> --image=<image-name> --replicas=<num-replicas>
-    # Crear un servicio para exponer el deployment, tendrá el mismo nombre que el deploy (esto solo expondrá los Pods del deployment bajo una IP ya que los Pods ya están corriendo, además el servicio solo se creará pero no será levantado)
-    kubectl expose deployment <deploy-name> --type=NodePort --port=<port>
-    # Levantar el servicio (en la terminal se mostrará la URL), de preferencia correrlo en otra consola ya que queda bloqueada (con esto ya podemos acceder a la app del deployment desede el exterior)
-    minikube service <service-name> --url
-
-    # Revisar el estado de todos los recursos existentes (pods, servicios, deployments, replicasets, etc)
-    kubectl get all
-    # Revisar el estado de los deployments existentes
-    kubectl get deployments
-    # Revisar el estado de los ReplicaSets del deployment
-    kubectl get replicaset -l app=<deploy-name>
-    # Revisar el estado de los pods del deployment
-    kubectl get pods -l app=<deploy-name>
-    # Revisar el estado de los servicios del deployment
-    kubectl get services -l app=<deploy-name>
-    # Ver las IPs de los Pods del servicio
-    kubectl get endpoints <service-name>
-    ```
-* Realizar limpieza completa de un deployment:
-    ```bash
-    # Ver qué existe
-    kubectl get all
-
-    # Eliminar Deployment y Service
-    kubectl delete deployment mi-app
-    kubectl delete service mi-app
-
-    # Verificar que se eliminó todo
-    kubectl get all
-
-    # Si quedó algo huérfano
-    kubectl delete pod <nombre-pod> --grace-period=0 --force
-    ```
-* Eliminar un deployment por etiqueta (más eficiente):
-    ```bash
-    # Si todos los recursos tienen el mismo label
-    kubectl delete all -l app=<deploy-name>
-    ```
-* Eliminar deployments por archivo YAML:
-    ```bash
-    # Si creaste tus recursos con: kubectl apply -f <mi-app>.yaml:
-    kubectl delete -f mi-app.yaml
-    ```
-* Eliminar todo lo de un namespace:
-    ```bash
-    # ⚠️ CUIDADO: Borra TODO en el namespace actual
-    kubectl delete all --all
-    # O para borrar todo en un namespace específico
-    kubectl delete namespace <namespace-name>
-    ```
-
-### Flujo de ejecución de los procesos de eliminación
-
-A continuación se describe lo que ocurre internamente al eliminar algún recurso.
-
-Eliminar un Deployment:
-* **Comando**: `kubectl delete deployment <deploy-name>`
-* **Consecuencias**: se elimina el deployment, su ReplicaSet, todos sus Pods, pero no el servicio ni los configMaps/Secrets.
-
-Eliminar un Service:
-* **Comando**: `kubectl delete service <deploy-name>`
-* **Consecuencias**: elimina el service, los endpoints asociados las iptables del kube-proxy, pero no se eliminan los Pods (siguen corriendo pero sin exposición hacia el exterior).
-
-Eliminar un Pod:
-* **Comando**: `kubectl delete pod <pod-name>`
-* **Consecuencias**: se elimina el Pod, pero el ReplicaSet detecta que falta un Pod y lo crea nuevamente con otra IP actualizando el enrutamiento en las iptables del kube-proxy.
-
-
-### Modelo de comunicación imperativo y declarativo
-
-Hay dos formas e indicarle a Kubernetes qué hacer:
-
-* **Modelo imperativo**: es mediante comandos con `kubectl` como `kubectl describe pod <nombre>`, le dices que hacer paso por paso.
-* **Modelo declarativo**: es mediante un archivo **YAML** como el siguiente, en este le describes el estado final al que quieres que lleguen tus deployments, tomando en cuenta pods, deployments, etc, y Kubernetes calcula los pasos para llegar ahí desde el estado actual.
-    ```yaml
-    apiVersion: apps/v1
-    kind: Deployment
-    metadata:
-    name: mi-nginx
-    spec:
-    replicas: 2
-    selector:
-        matchLabels:
-        app: nginx
-    template:
-        metadata:
-        labels:
-            app: nginx
-        spec:
-        containers:
-        - name: nginx
-            image: nginx
-            ports:
-            - containerPort: 80
-    ```
-
-
-El modo preferido es el declarativo que es mediante archivos YAML, ya que es más predecible y además versionable con herramientas como Git.
-
-
 
 
