@@ -251,16 +251,32 @@ spec:
   containers:
   - name: nginx
     ports: # lista de puertos que el contenedor expone, no abre puertos, es para que los Services sepan como a qué puerto mapear
-    - containerPort: 80 # puerto en el que estará escuchando el contenedor
+    - containerPort: 8080 # puerto en el que estará escuchando el contenedor
       name: http # nombre descriptivo del puerto (opcional)
       protocol: TCP # protocolo, puede ser TCP o UDP
-    env: # lista de variables de entorno para el contenedor
-    - name: ENVIRONMENT # nombre de la variable
-      value: "production" # valor de la variable
-    - name: MAX_CONNECTIONS
-      value: "100"
     command: ["nginx"] # comando a ejecutar (sobreescribe al ENTRYPOINT de la imagen)
     args: ["-g", "daemon off;"] # argumentos para el comando (sobreescribe CMD de la imagen)
+```
+
+#### Configuraciones de variable sde entorno para el contenedor
+
+```yaml
+spec:
+  containers:
+  - name: nginx
+    env: # lista de variables de entorno para el contenedor
+    - name: ENVIRONMENT # nombre de la variable
+      value: "production" # valor crudo de la variable
+    - name: DATABASE_URL
+      valueFrom: 
+        configMapKeyRef: # Podemos sacar datos de los configMaps (ver abajo como crearlos con YAML)
+          name: app-config # nombre del config map a usar
+          key: database.conf # nombre de la entrada a usar (recordemos que un configmap puede tener varias entradas) cada entrada puede tener varias parejas llave=valor, me imagino que todas ellas se inyectan como variables de entorno.
+    - name: DB_PASSWORD
+      valueFrom:
+        secretKeyRef: # Podemos sacar datos de un Secret (ver abajo como crearlos con YAML)
+          name: db-secret # nombre del Secret a usar
+          key: password # nombre de la entrada a montar, en este caso la entrada es una única llave.
 ```
 
 #### Más configuraciones para recursos del sistema para el contenedor
@@ -284,20 +300,21 @@ spec:
 spec:
   containers:
   - name: nginx
-    livenessProbe: # configuraciones para revisar si el contenedor sigue vivo, si falla se recrea el contenedor
-      httpGet:
-        path: / # ruta a donde se hará la petición de la prueba
-        port: 80
+    livenessProbe: # configuraciones para revisar si el contenedor sigue vivo, si falla se recrea el contenedor, para estas validaciones, el contenedor debe implementar el endpoint que retornará Código HTTP 200 si todo sigue bien. Hay otros mecanismos para realizar la prueba.
+      httpGet: # Tipo de petición que usa el endpoint del contenedor
+        path: / # url relativa a donde se hará la petición de la prueba dentro del contenedor
+        port: 8081 # Puerto donde se hará la petición
         httpHeaders: # podemos agregar las cabeceras que queramos a la petición http
         - name: Custom-Header
           value: "value"
-      initialDelaySeconds: 10 # Espera antes de empezar
-      periodSeconds: 5 # Cada cuánto verifica
-      timeoutSeconds: 2 # Timeout de la verificación
-      failureThreshold: 3 # Fallos antes de reiniciar
-    readinessProbe: # configuraciones para revisar si el contenedor está listo par recibir tráfico, si falla se deja de mandar tráfico pero no se recrea el contenedor
+      initialDelaySeconds: 30 # Espera antes de la primera verificación
+      periodSeconds: 10 # Cada cuántos segundos verifica
+      timeoutSeconds: 5 # Timeout para cada verificación
+      successThreshold: 1 # Éxitos consecutivos = sano
+      failureThreshold: 3 # Fallos consecutivos = no sano
+    readinessProbe: # configuraciones para revisar si el contenedor está listo par recibir tráfico, si falla se deja de mandar tráfico pero no se recrea el contenedor. Similar a `livenessProbe`.
       #...configuraciones similares a `livenessProbe`
-    startupProbe: # configuraciones para revisar si el contenedor inició correctament, deshabilita livenessProbe y readinessProbe hasta que esta prueba pase, si falla se recrea el contenedor.
+    startupProbe: # configuraciones para revisar si el contenedor inició correctament, deshabilita livenessProbe y readinessProbe hasta que esta prueba pase, si falla se recrea el contenedor. Similar a `livenessProbe`.
       #...configuraciones similares a `livenessProbe`
 ```
 
@@ -308,27 +325,51 @@ spec:
   containers:
   - name: nginx
     volumeMounts: # Dónde montar volúmenes en el contenedor
-    - name: cache # nombre del volumen a montar (definidos más abajo)
+    - name: cache # nombre del volumen a montar (definido más abajo en volumes)
       mountPath: /usr/share/nginx/cache # ruta del volumen dentro del conenedor
-    - name: config
+    - name: config # nombre del volumen a montar (definido más abajo en volumes)
       mountPath: /etc/nginx/conf.d
-      readOnly: true
-  volumes: # Definición de los volúmenes
-  - name: cache # nombre del volumen
+      readOnly: true # siempre true cuando montmos un Secret
+    - name: data-volume # nombre del volumen a montar (definido más abajo en volumes)
+      mountPath: /data
+  volumes: # Definición de los volúmenes, no los monta para esto hay que especificarlo en `volumeMounts` del contenedor
+  - name: cache # nombre para el volumen
     emptyDir: {} # directorio vacío temporal, creado cuando el Pod inicia y es compartido entre los contenedores del Pod, se elimina cuando el Pod muere.
-  - name: docker-socket
+  - name: docker-socket # nombre para el volumen
     hostPath: # Monta un directorio para el nodo (⚠️ Peligroso en producción)
       path: /var/run/docker.sock
-  - name: config 
-    configMap: # Monta un ConfigMap como archivos
+  - name: config # nombre para el volumen
+    configMap: # Monta un las entradas de un ConfigMap como archivos
       name: nginx-config
-  - name: credentials
+      items: # Lista de entradas a montar de el config map, si no se especifica se montarán todas un archivo por entrada con el mismo nombre de la entrada
+      - key: database.conf # nombre de la entrada a montar
+        path: db.conf # Renombrar la entrada (el archivo) al montar
+  - name: credentials # nombre para el volumen
     secret: # Monta un Secret como archivos
       secretName: db-credentials
-  - name: data # Monta almacenamiento persistente (Persistent Volume Claim)
+  - name: data-volume  # nombre para el volumen
     persistentVolumeClaim:
-      claimName: mi-pvc
+      claimName: pvc-local # nombre del Persistent Volume Claim (ver abajo como crearlo con YAML)
 ```
+
+`NOTA`: podemos combinar varias fuentes (secrets, configMaps, etc) en un mismo volumen con la configuración `projected` del volumen, no lo documentaré aquí pero lo dejo anotado como futura investigación.
+
+Tipos de volúmenes:
+
+* `emptyDir`: define un directorio virtual vacío que se crea cuando el Pod inicia y es accesible por todos los contenedores del Pod, se elimina cuando el Pod muere. Sus configuraciones son:
+    * `medium`: para indicar si se usará memoria (valor `Memory`) en lugar de disco (tmpfs).
+    * `sizeLimit`: límite de tamaño, ej. `1Gi`, `1M`, etc.
+* `hostPath`: define un directorio o archivo del nodo, es peligroso en producción porque depende del nodo específico. Sus configuraciones son:
+    * `path`: directorio del volumen en el nodo, ej. `/data/nginx`
+    * `type`: Tipo de verificación (`DirectoryOrCreate` Crea si no existe, `File` Debe existir como archivo, `FileOrCreate` Crea archivo si no existe, entre otros)
+* `configMap`: define un volumen con datos de configuración desde un ConfigMap como archivos en el Pod. Recordemos que los configMaps se almacenan en el `etcd`. Sus configuraciones son:
+    * `name`: nombre del configMap a usar, 
+    * `items`: lista de entradas a montar, si no se especifica se montarán todas un archivo por entrada con el mismo nombre de la entrada.
+    * `NOTA`: además de montar configMaps como volúmenes, podemos integrarlos en los contenedores mediante las variables de entorno.
+* `secret`: Similar a ConfigMap pero para datos sensibles (contraseñas, tokens, certificados). Codificados en base64 (ver abajo como crear Secrets con YAML). Además de inyectar secrets como volúmenes, podemos inyectarlos como variables de entorno (ver arriba). Sus configuraciones son:
+    * `secretName`: nombre del Secret a montar, un archivo por cada entrada del Secret.
+* `persistentVolumeClaim`: define un PVC como volumen. Sus configuraciones son:
+    * `claimName`: nombre del PVC a usar.
 
 #### Ejemplo de YAML para un Deployment
 
@@ -382,6 +423,198 @@ spec:
     nodePort: 30080 # Puerto en el nodo (30000-32767)
     protocol: TCP
     name: http
+```
+
+#### Ejemplo YAML para crear entradas para el configMap
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config # nombre del config map, todas las entradas definidas serán asociadas en este
+data:
+  database.conf: | # nombre de la entrada seguida por los datos en formato llave=valor
+    host=postgres.default.svc.cluster.local
+    port=5432
+    database=myapp
+  app.properties: |
+    log.level=INFO
+    max.connections=100
+```
+
+#### Ejemplo YAML para crear entradas de Secret
+
+Los secrets deben ser almacenados en codifiación `base64`. Los Secrets se almacenan en el `etcd` encriptados (si está configurado así). Solo se envían a los nodos que tienen al menos un Pod que los necesita. Kubelet guarda los Secrets en RAM, y son montados en los contenedores como archivos en memoria y al morir el Pod el Secret se elimina de la memoria.
+
+**⚠️ Importante:** Los Secrets NO están encriptados en etcd por defecto. Debes configurar encryption-at-rest.
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-secret # nombre del secret
+type: Opaque # Tipo genérico
+data: # datos, podemos agregar tantos como queramos
+  username: YWRtaW4= # "admin" en base64
+  password: czNjcjN0 # "s3cr3t" en base64
+```
+
+Tipos de Secret:
+* Almacenar datos genéricos, podemos poner las entradas que queramos:
+    ```yaml
+    type: opaque
+    ```
+* Almacenar credenciales de Docker:
+    ```yaml
+    type: kubernetes.io/dockerconfigjson
+    data:
+      .dockerconfigjson: <base64-encoded-docker-config>
+    ```
+* Autenticación básica:
+    ```yaml
+    type: kubernetes.io/basic-auth
+    data:
+      username: <base64>
+      password: <base64>
+    ```
+* Autenticación SSH:
+    ```yaml
+    type: kubernetes.io/ssh-auth
+    data:
+      ssh-privatekey: <base64>
+    ```
+* certificados TLS:
+    ```yaml
+    type: kubernetes.io/tls
+    data:
+      tls.crt: <base64>
+      tls.key: <base64>
+    ```
+* Service Account Token:
+    ```yaml
+    type: kubernetes.io/service-account-token
+    ```
+
+#### Ejemplo YAML para crear Persistent Volume (PV) y Persistent Volume Claim (PVC)
+
+
+**Persistent Volume (PV)**: recurso de almacenamiento asociado al cluster, existe independientemente de los Pods, es como una unidad de almacenamiento virtual y podemos reservar espacio de esta unidad para un Pod mediante un Persistent Volume Claim (PVC).
+
+```yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-local # nombre del volumen
+spec:
+  capacity:
+    storage: 10Gi # Tamaño
+  volumeMode: Filesystem # Filesystem o Block
+  accessModes:
+  - ReadWriteOnce # más modos abajo
+  persistentVolumeReclaimPolicy: Retain # Retain, Delete, Recycle
+  storageClassName: manual # Clase de almacenamiento
+  hostPath: # Tipo de volumen (hostPath solo para testing)
+    path: /mnt/data
+```
+
+Tipos de Access Modes:
+* **ReadWriteOnce (RWO)**: Montado R/W por UN solo nodo.
+* **ReadOnlyMany (ROX)**: Montado R/O por MÚLTIPLES nodos.
+* **ReadWriteMany (RWX)**: Montado R/W por MÚLTIPLES nodos.
+
+Tipos de Reclaim POlicy:
+* **Retain**: Cuando se borra el PVC, el PV queda pero requiere limpieza manual:
+* **Delete**: Borra el volumen automáticamente (cuidado con datos).
+
+Tipos de Storage Class:
+* `manual`: crearlo manualmente ya sea con comandos o con YAML (ver ejemplos abajo).
+* Además de creación manual, podemos usar StorageClass para creación automática en provedores en la nube como (AWS, Azure, GCE, etc), no voy a entrar en detalle pero solo lo documento para futura investigación. Para usar un Storage Class, primero tenemos que crearlo con YAML donde indicamos las configuraciones de creación en el provedor deseado.
+
+**Persistent Volume Claim (PVC)**: solicitud de almacenamiento de un Pod para reservar espacio en un PV, algo como `"Quiero 5GB de disco"` y Kubernetes le enlaza el espacio con un PV. Aquí solo lo estamos creando, pero nocesitamos enlazarlo a un contenedor creando un volumen para el PVC en `volumes` y montando el volumen con `volumeMounts` (ver ejemlos arriba).
+
+Ciclo de vida: PVC creado → Bound a PV → Pod usa PVC → Pod muere → PVC sigue existiendo → Datos persisten.
+
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-local # nombre del claim
+spec:
+  accessModes:
+  - ReadWriteOnce # Debe coincidir con la definición en el PV
+  resources:
+    requests:
+      storage: 5Gi # Cantidad que necesito (≤ PV)
+  storageClassName: manual # Debe coincidir con PV
+```
+
+#### Ejmplo de puesta en práctica para un Deployment con almacenamiento persistente para MySQL
+
+```yaml
+# Secret con credenciales para MySQL
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysql-secret # nombre del secret
+type: Opaque # Tipo genérico
+data: # datos, podemos agregar tantos como queramos
+  username: YWRtaW4= # "admin" en base64
+  password: czNjcjN0 # "s3cr3t" en base64
+---
+# PV
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-local # nombre del volumen
+spec:
+  ... demás configuraciones
+---
+# MySQL PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pvc
+spec:
+ ... demás configuraciones
+---
+# MySQL Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        env:
+        - name: MYSQL_ROOT_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: username
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: password
+        ports:
+        - containerPort: 3306
+        volumeMounts:
+        - name: mysql-storage
+          mountPath: /var/lib/mysql    # Datos de MySQL
+      volumes:
+      - name: mysql-storage
+        persistentVolumeClaim:
+          claimName: mysql-pvc
 ```
 
 #### Instrucciones para validar un archivo YAML
