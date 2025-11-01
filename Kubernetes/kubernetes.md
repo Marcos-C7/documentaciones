@@ -1,35 +1,33 @@
 # Kubernetes
 
-Kubernetes es un sistema open-source de oquestación de contenedores Docker para automatizar el despliegue, escalado y mantenimiento de software en la nube. Su arquitectura, a grandes rasgos se compone de las siguientes partes:
-
-### Componentes de la arquitectura de Kubernetes
+Kubernetes es un sistema open-source de orquestación de contenedores Docker para automatizar el despliegue, escalado y mantenimiento de software en la nube. Su arquitectura, a grandes rasgos se compone de las siguientes partes:
 
 * **Cluster**: es un conjunto de nodos (máquinas) enlazadas mediante Kubernetes.
 * **Nodo**: una máquina física o virtual, cada nodo ejecuta las siguientes componentes:
     * **kubelete**: responsable del estado de ejecución del nodo asegurándose de que todos contenedores del nodo estén saludables, así como de iniciarlos, detenerlos y organizarlos en Pods. Consulta las especificaciones de los Pods mediante el API Server y se asegura de que los contenedores de cada Pod estén corriendo.
     * **Container runtime**: encargado del ciclo de vida de los contenedores, los crea, los detiene y elimina. Tiene su propia interfaz de comandos llamada **Container Runtime Interface (CRI)**. Los más usuales son Containerd (el motor de Docker), CRI-O.
-    * **Kube proxy**: es una red proxy y laod balancer, se encarga de dirigir el tráfico al contenedor apropiado en base a la IP y el Puerto así como de balancear la carga entre las replicas de un deployment.
+    * **Kube proxy**: es una red proxy y laod balancer, se encarga de mantener las iptables y dirigir el tráfico al contenedor apropiado en base a la IP y el Puerto así como de balancear la carga entre las replicas de un deployment.
 * **Pod**: es la unidad básica que puede ser agendada para desplegarse, este contiene los contenedores y se le asigna una IP única en el cluster, dentro del cluster sus contenedores tienen comunicación entre sí. Estos se suelen crear al crear un Deployment y su nombre suele tener la estructura `<deploy-name>-<replicaset>-<hash>`, esto ya que un deployment tiene un replicaset que se encarga de crear un Pod para cada replica.
 * **Contenedor**: un contenedor de Docker, que vive dentro de un Pod y además ejecuta una aplicación como parte de un microservicio.
-* **Control plane**: es un nodo cerebro en el que se ejecutan las principales componentes que administran el cluster, como son:
+* **Control plane**: es un nodo cerebro que ejecuta las principales componentes que administran el cluster, como son:
 
     * **API Server** (`kube-apiserver`): es la interfaz de comuniación tipo REST por HTTP para poder darle instrucciones de actualización del cluster a Kubernetes. Es el único punto de comunicación tanto para el humano administrador como entre las mismas componentes, como los controladores.
     * **Etcd** (`etcd`): tienda de datos persistente llave-valor que sirve como punto de encuentro para matener todo el cluster sincronizado, aquí se almacena y consulta todo el estado del cluster (pods, services, deployments, secrets, etc), aquí se guarda absolutamente todo lo relacionado con el estado actual y futuro.
-    * **Scheduer** (`kube-scheduler`): se encarga de determinar en qué nodo va a ejecutarse cada Pod, tomando en cuenta los recursos disponibles (RAM, CPU, etc), solo agenda la ejecución no lo ejecuta. Si detecta un pod no asignado, evalúa los nodos existentes y asigna el pod al nodo mejor puntuación. Se puede correr más de un scheduler y podemos implementar los nuestros propios tipo plug-ins para extender o modificar el funcionamiento por defecto.
+    * **Scheduer** (`kube-scheduler`): se encarga de determinar en qué nodo va a ejecutarse cada Pod, tomando en cuenta los recursos disponibles (RAM, CPU, etc), solo agenda la ejecución no lo ejecuta. Si detecta un pod no asignado, evalúa los nodos existentes y asigna el pod al nodo de mejor puntuación. Se puede correr más de un scheduler y podemos implementar los nuestros propios tipo plug-ins para extender o modificar el funcionamiento por defecto.
     * **Controller Manager** (`kube-controller-manager`): se encarga de la ejecución y administración de los controladores, los cuales se encargan de mantener el cluster en el estado deseado. Algunos de los controladores son:
-        * **Controlador de replicación**: cada deployment debe tener un `ReplicaSet` que almacena cuantas replicas se desean y cuantas existen, este controlador se encarga de que ambos números coincidan, si falta o muere alguno levanta nuevos y si hay de más los elimina. Esto convierte a Kubernetes en auto-reparable.
+        * **Controlador de replicación**: cada deployment debe tener un `ReplicaSet` que almacena cuantas replicas del Pod se desean y cuantas existen, este controlador se encarga de que ambos números coincidan, si falta o muere alguno levanta nuevos y si hay de más los elimina. Esto convierte a Kubernetes en auto-reparable.
         * **Controlador de nodos**: vigila la salud de los nodos y si alguno deja de responder reasigna sus Pods a otros nodos.
         * **Controlador de deployment**: gestiona los deployments, creándoles o actualizándoles su `ReplicaSet` el cual se encargará de crear las réplicas de los Pods.
-            * **Depoloyment**: es la descripción de una aplicación, qué imágen va a usar, cuantas réplicas quieres corriendo, etc. Tú la describes y kubernetes se encarga de mantenerla, acualizarla y repararla recreando pods muertos, entre otras cosas.
-        * **Controlador de servicios**: gestiona los servicios y configura balanceadores de carga.
+            * **Depoloyment**: es la descripción de una aplicación (Pod), qué contenedores va a tener, que imágenes van a usar los contenedores, cuantas réplicas del Pod quieres corriendo, etc. Tú la describes y kubernetes se encarga de mantenerla, acualizarla y repararla recreando pods muertos, entre otras cosas mediante los demás controladores.
+        * **Controlador de servicios**: gestiona los Services y configura iptables y balanceadores de carga en el `kube-proxy`.
             * **Servicio**: para que un Pod sea accesible desde el exterior se tiene que exponer mediante un servicio, el cual agrupa bajo una IP a uno o más Pods de un deployment. De esta forma, podemos tener 3 pods de un deployment levantados con IP diferentes y agruparlos bajo una misma IP de un servicio que se encargue de reenviar las solicitudes hacia las IPs de los pods.
 
 En resumen, el cliclo de vida del cluster se resume en lo siguiente:
 ```
 Loop infinito:
 1. Observar el estado actual (desde etcd vía el API Server).
-2. Comparar con el estado deseado.
-3. Si hay diferencia, tomar acciones.
+2. Comparar con el estado deseado (también desde etcd vía el API Server).
+3. Si hay diferencia, tomar acciones (mediante los controladores).
 ```
 
 ### Componentes de la red del cluster
@@ -41,6 +39,8 @@ Loop infinito:
 * **CNI (Container Network Interface)**: modelo de red, Minikube usa `bridge` o `calico` por defecto, pero existe también `flannel`, `cilium` o `weave`.
 
 ### Volúmenes
+
+Los volúmenes son unidades de almacenamiento persistente, similar a los que se usan en Docker pero en Kubernetes son mucho más potentes. Hay varios tipos de volúmenes y cada uno de ellos tiene un ciclo de vida y alcance diferente (ver abajo los ejemplos YAML para crear volúmenes).
 
 * **Volume**: directorio asociado a un Pod que es accesible por sus contenedores, vive mientras viva el Pod, puede ser de tipo **emptyDir**, **hostPath**, **configMap** o **secret**.
 * **Persistent Volume (PV)**: recurso de almacenamiento asociado al cluster, existe independientemente de los Pods.
@@ -414,18 +414,23 @@ kind: Service
 metadata:
   name: mi-service
 spec:
-  type: NodePort # Tipo de Service, también hay `ClusterIP`, `LoadBalancer`, `ExternalName`.
+  type: NodePort # Tipo de Service, también hay `ClusterIP` (solo acceso interno), `LoadBalancer`, `ExternalName`.
   selector: # Qué Pods incluir en el servicio
     app: mi-app
   ports:
-  - port: 80 # Puerto del Service
-    targetPort: 80 # Puerto del contenedor
-    nodePort: 30080 # Puerto en el nodo (30000-32767)
-    protocol: TCP
-    name: http
+  - name: http # nombre desciptivo (opcional)
+    protocol: TCP # TCP o UDP (default: TCP)
+    port: 80 # Puerto del Service (podemos hacerle peticiones mediante http://mi-service:<port>)
+    targetPort: 8000 # Puerto donde el contenedor está recibiendo peticiones (el service redirigirá el tráfico a este puerto en el contenedor, no olvidemos configurar el `ports.containerPort` en el contenedor)
+    nodePort: 30080 # solo para NodePort/LoadBalancer, puerto en el nodo (máquina) (rango 30000-32767), tal que al recibir una petición en el nodo en este puerto la redirigirá a http://mi-service:<port>.
 ```
 
+En resumen, especifica el camino a seguir de una petición desde el nodo hasta el contenedor:
+`http://<IP-del-Nodo>:<nodePort> -> http://<service-name>:<port> -> http://<container-name>:<targetPort>`.
+
 #### Ejemplo YAML para crear entradas para el configMap
+
+Recordemos que los `configMap` se almacenan en el componente `etcd` de Kubernetes. Aquí veremos como crear un `configMap`, los ConfigMaps se usan para almacenar configuraciones de las aplicaciones y cada uno puede contener varias entradas con lo cual podemos almacenar todas las configuraciones de una app o de un servicio en un mismo `configMap`.
 
 ```yaml
 apiVersion: v1
@@ -444,9 +449,10 @@ data:
 
 #### Ejemplo YAML para crear entradas de Secret
 
-Los secrets deben ser almacenados en codifiación `base64`. Los Secrets se almacenan en el `etcd` encriptados (si está configurado así). Solo se envían a los nodos que tienen al menos un Pod que los necesita. Kubelet guarda los Secrets en RAM, y son montados en los contenedores como archivos en memoria y al morir el Pod el Secret se elimina de la memoria.
+Similar al los Config Maps solo que, en este caso, los Secrets se usan para almacenar credenciales, certificados criptográficos, y todos tipo de información altamente sensible. Los secrets deben ser almacenados en codifiación `base64`. También se almacenan en el `etcd` y pueden ser encriptados si se configura el `encryption-at-rest`. Estos solo se envían a los nodos que tienen al menos un Pod que los necesita. Kubelet guarda los Secrets en RAM, y son montados en los contenedores como archivos en memoria y al morir el Pod el Secret se elimina de la memoria.
 
-**⚠️ Importante:** Los Secrets NO están encriptados en etcd por defecto. Debes configurar encryption-at-rest.
+**⚠️ Importante:** Los Secrets NO están encriptados en `etcd` por defecto, debes configurar `encryption-at-rest`.
+
 
 ```yaml
 apiVersion: v1
@@ -499,6 +505,8 @@ Tipos de Secret:
 
 
 **Persistent Volume (PV)**: recurso de almacenamiento asociado al cluster, existe independientemente de los Pods, es como una unidad de almacenamiento virtual y podemos reservar espacio de esta unidad para un Pod mediante un Persistent Volume Claim (PVC).
+
+**⚠️ Importante**: estos solo se pueden crear por un **administrador**.
 
 ```yaml
 apiVersion: v1
@@ -631,10 +639,130 @@ kubectl apply -f mi-archivo.yaml --dry-run=server -o yaml
 
 ```bash
 # Aplicar
-kubectl apply -f <file>.yaml:
+kubectl apply -f <file>.yaml
 # Desaplicar
 kubectl delete -f <file>.yaml
 ```
+
+### Como hacer uso de una app levantada con un deployment
+
+Una vez que el Deployment está corriendo en Kubernetes junto con un Service, ya podemos acceder a la app mediante la URL del nodo y el puerto que hayamos configurado en `nodePort` del Service:
+```
+http://<node-ip>:<nodePort>
+```
+Solo que hay un inconveniente muy importante, Minikube emula un cluster de un solo nodo (máquina) en la máquina local, pero resulta que dicho nodo no es la máquina local en sí, sino en una máquina virtual o contenedor, así que para acceder a la app tenemos que hacer uso de la IP de dicha máquina virtual (nodo). Podemos ver cual driver de virtualización estamos usando con:
+```bash
+minikube profile list
+```
+
+El problema es que el Nodo está en una red virtual aislada del host por seguridad, así que no será posible acceder a la app desde el host de manera directa, pero a continuación vemos algunas formas de acceder de manera indirecta.
+
+#### Conectarse al nodo virtual via SSH y hacer peticiónes desde ahí:
+
+* Primero obtenemos la IP del nodo:
+    ```bash
+    # Regresa la IP que tiene el nodo emulado
+    minikube ip
+    ```
+* Nos conectamos al nodo y ejecutamos la petición:
+    ```bash
+    # Nos conectamos al nodo
+    minikube ssh
+    # Realizamos la petición a la IP del nodo obtenida en el paso anterior y el nodePort configurado en el Service
+    curl http://192.168.49.2:30801
+    ```
+
+#### Crear un tunel temporal desde el host hacia el nodo virtual
+
+Con esta forma podremos acceder a la app como si estuviera corriendo en el host (127.0.0.1), solo tenemos que crear un tunel (port-forward) entre el host y el nodo virtual, como si el host fuera el nodo:
+```bash
+# Además de crear el tunel, muestra la tabla de direcciones internas del nodo virtual y abre automáticamente el navegador con la app usando el tunel
+minikube service <service-name>
+
+# O el siguiente que crea el tunel y solo muestra la URL que generó el tunel para usarla
+minikube service <service-name> --url
+
+# Ayuda acerca del comando
+minikube service -h
+```
+
+⚠️ El problema es que cada que se abre un tunel el puerto es diferente, así que complica un poco las cosas ya que hay que estar actualizando el puerto en las peticiones.
+
+⚠️ En cualquier caso la terminal queda bloqueada porque el tunel queda corriendo, podemos cerrar el tunel con `CTRL+C` en cuyo caso la app dejará de respoder en la URL local.
+
+#### Crear un tunel temporal a un Deployment, Pod o Service directamente
+
+En el método anterior, se creaba un tunel desde el host hacia el nodo virtual de minikube. En este caso veremos como crear un tunel del host directamente a un Depolyment, Pod o Service, es útil para realizar pruebas hacia algún enpoint o conjunto de endpoints. La sintaxis general es:
+```bash
+kubectl port-forward <resource>/<resource-name> <hostPort>:<resourcePort>
+```
+Ejemlplos:
+```bash
+# Tunel hacia un servicio que redirige de 127.0.0.1:8000 -> mi-service:7000
+kubectl port-forward service/mi-service 8000:7000
+
+# Tunel a un Pod que redirige de 127.0.0.1:8888 -> mi-pod:5000
+kubectl port-forward pod/mi-pod 8888:5000
+```
+
+⚠️ En este caso como nosotros definimos el puerto, este puede quedar igual, a diferencia del tunel hacia el nodo.
+
+⚠️ En cualquier caso, la terminal quedará bloqueada con el puente abierto, el cual puede cerrarse con `CTRL+C`.
+
+## Crear imágenes desde Dockerfile que puedan integrarse en un Deployment
+
+No podemos usar el Dockerfile directamente en un deployment, primero tenemos que construir la imágen desde el Dockerfile, subirla aun registro que puede ser `Docker Hub` o para pruebas puede ser el registro de `Minikube` y finalmente referenciarla en el Deployment. Para estos ejemplos usaremos el registro de Minikube.
+
+Recordemos que Minikube usa un Docker daemon, para facilitar la integración con el registro de Minikube, tenemos que configurar la terminal para que use el Docker daemon de Minikube en lugar de el del sistema. Para esto ejecutamos el siguiente comando:
+
+```bash
+# Windows (Powershell)
+& minikube -p minikube docker-env --shell powershell | Invoke-Expression
+# Linux
+eval $(minikube docker-env)
+
+# Verifica que estás usando el Docker de Minikube: deberías ver los contenedores de Kubernetes
+docker ps
+```
+
+`Nota`: De hecho el comando para realizarlo debería verse en el mensaje que se muestra al ejecutar `minikube docker-env`.
+
+Con esto las imágenes que construyamos ya estarán disponibles directamente en Minikube sin necesidad de hacer `docker push`.
+
+El flujo completo para integrar una imágene en un deployment sería el siguiente:
+
+* Primero implementamos el Dockerfile.
+* Construimos la imágen:
+    ```bash
+    # Construir la imágen
+    docker build -t <image-name> .
+
+    # Opcionalmente podemos verificar que existe
+    docker images | grep <image-name>
+    ```
+* La usamos directamente en el Deployment:
+    ```yaml
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: mi-deployment
+    spec:
+      replicas: 3
+      selector:
+        matchLabels:
+          app: mi-app
+      template:
+        metadata:
+          labels:
+            app: mi-app
+        spec:
+          containers:
+          - name: mi-app
+            image: <image-name> # nombre de la imagen recién creada
+            imagePullPolicy: Never # ← CRÍTICO: No intentes descargar
+            ports:
+            - containerPort: 8000
+    ```
 
 
 # Glosario de comandos
@@ -695,5 +823,7 @@ Actualización:
 * `kubectl rollout pause deployment <deploy-name>`: pausa todas las actualizaciones pero sigue corriendo.
 * `kubectl rollout resume deployment <deploy-name>`: reanuda las actualizaciones.
 * `kubectl rollout history deployment <deploy-name>`: ver historial de cambios.
+
+
 
 
