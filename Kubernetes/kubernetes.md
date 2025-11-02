@@ -9,18 +9,19 @@ Kubernetes es un sistema open-source de orquestación de contenedores Docker par
     * **Kube proxy**: es una red proxy y laod balancer, se encarga de mantener las iptables y dirigir el tráfico al contenedor apropiado en base a la IP y el Puerto así como de balancear la carga entre las replicas de un deployment.
 * **Pod**: es la unidad básica que puede ser agendada para desplegarse, este contiene los contenedores y se le asigna una IP única en el cluster, dentro del cluster sus contenedores tienen comunicación entre sí. Estos se suelen crear al crear un Deployment y su nombre suele tener la estructura `<deploy-name>-<replicaset>-<hash>`, esto ya que un deployment tiene un replicaset que se encarga de crear un Pod para cada replica.
 * **Contenedor**: un contenedor de Docker, que vive dentro de un Pod y además ejecuta una aplicación como parte de un microservicio.
-* **Control plane**: es un nodo cerebro que ejecuta las principales componentes que administran el cluster, como son:
 
-    * **API Server** (`kube-apiserver`): es la interfaz de comuniación tipo REST por HTTP para poder darle instrucciones de actualización del cluster a Kubernetes. Es el único punto de comunicación tanto para el humano administrador como entre las mismas componentes, como los controladores.
-    * **Etcd** (`etcd`): tienda de datos persistente llave-valor que sirve como punto de encuentro para matener todo el cluster sincronizado, aquí se almacena y consulta todo el estado del cluster (pods, services, deployments, secrets, etc), aquí se guarda absolutamente todo lo relacionado con el estado actual y futuro.
-    * **Scheduer** (`kube-scheduler`): se encarga de determinar en qué nodo va a ejecutarse cada Pod, tomando en cuenta los recursos disponibles (RAM, CPU, etc), solo agenda la ejecución no lo ejecuta. Si detecta un pod no asignado, evalúa los nodos existentes y asigna el pod al nodo de mejor puntuación. Se puede correr más de un scheduler y podemos implementar los nuestros propios tipo plug-ins para extender o modificar el funcionamiento por defecto.
-    * **Controller Manager** (`kube-controller-manager`): se encarga de la ejecución y administración de los controladores, los cuales se encargan de mantener el cluster en el estado deseado. Algunos de los controladores son:
-        * **Controlador de replicación**: cada deployment debe tener un `ReplicaSet` que almacena cuantas replicas del Pod se desean y cuantas existen, este controlador se encarga de que ambos números coincidan, si falta o muere alguno levanta nuevos y si hay de más los elimina. Esto convierte a Kubernetes en auto-reparable.
-        * **Controlador de nodos**: vigila la salud de los nodos y si alguno deja de responder reasigna sus Pods a otros nodos.
-        * **Controlador de deployment**: gestiona los deployments, creándoles o actualizándoles su `ReplicaSet` el cual se encargará de crear las réplicas de los Pods.
-            * **Depoloyment**: es la descripción de una aplicación (Pod), qué contenedores va a tener, que imágenes van a usar los contenedores, cuantas réplicas del Pod quieres corriendo, etc. Tú la describes y kubernetes se encarga de mantenerla, acualizarla y repararla recreando pods muertos, entre otras cosas mediante los demás controladores.
-        * **Controlador de servicios**: gestiona los Services y configura iptables y balanceadores de carga en el `kube-proxy`.
-            * **Servicio**: para que un Pod sea accesible desde el exterior se tiene que exponer mediante un servicio, el cual agrupa bajo una IP a uno o más Pods de un deployment. De esta forma, podemos tener 3 pods de un deployment levantados con IP diferentes y agruparlos bajo una misma IP de un servicio que se encargue de reenviar las solicitudes hacia las IPs de los pods.
+Además, además de los nodos creados para desplegar aplicaciones (**Worker Nodes**), hay un nodo llamado Plano de Control (**Control Plane**) que es el cerebro que ejectuta las principales componentes que administran el cluster, como son:
+
+* **API Server** (`kube-apiserver`): es la interfaz de comuniación tipo REST por HTTP para poder darle instrucciones de actualización del cluster a Kubernetes. Es el único punto de comunicación tanto para el humano administrador como entre las mismas componentes, como los controladores.
+* **Etcd** (`etcd`): tienda de datos persistente llave-valor que sirve como punto de encuentro para matener todo el cluster sincronizado, aquí se almacena y consulta todo el estado del cluster (pods, services, deployments, secrets, etc), aquí se guarda absolutamente todo lo relacionado con el estado actual y futuro.
+* **Scheduer** (`kube-scheduler`): se encarga de determinar en qué nodo va a ejecutarse cada Pod, tomando en cuenta los recursos disponibles (RAM, CPU, etc), solo agenda la ejecución no lo ejecuta. Si detecta un pod no asignado, evalúa los nodos existentes y asigna el pod al nodo de mejor puntuación. Se puede correr más de un scheduler y podemos implementar los nuestros propios tipo plug-ins para extender o modificar el funcionamiento por defecto.
+* **Controller Manager** (`kube-controller-manager`): se encarga de la ejecución y administración de los controladores, los cuales se encargan de mantener el cluster en el estado deseado. Algunos de los controladores son:
+    * **Controlador de replicación**: cada deployment debe tener un `ReplicaSet` que almacena cuantas replicas del Pod se desean y cuantas existen, este controlador se encarga de que ambos números coincidan, si falta o muere alguno levanta nuevos y si hay de más los elimina. Esto convierte a Kubernetes en auto-reparable.
+    * **Controlador de nodos**: vigila la salud de los nodos y si alguno deja de responder reasigna sus Pods a otros nodos.
+    * **Controlador de deployment**: gestiona los deployments, creándoles o actualizándoles su `ReplicaSet` el cual se encargará de crear las réplicas de los Pods.
+        * **Depoloyment**: es la descripción de una aplicación (Pod), qué contenedores va a tener, que imágenes van a usar los contenedores, cuantas réplicas del Pod quieres corriendo, etc. Tú la describes y kubernetes se encarga de mantenerla, acualizarla y repararla recreando pods muertos, entre otras cosas mediante los demás controladores.
+    * **Controlador de servicios**: gestiona los Services y configura iptables y balanceadores de carga en el `kube-proxy`.
+        * **Servicio**: para que un Pod sea accesible desde el exterior se tiene que exponer mediante un servicio, el cual agrupa bajo una IP a uno o más Pods de un deployment. De esta forma, podemos tener 3 pods de un deployment levantados con IP diferentes y agruparlos bajo una misma IP de un servicio que se encargue de reenviar las solicitudes hacia las IPs de los pods.
 
 En resumen, el cliclo de vida del cluster se resume en lo siguiente:
 ```
@@ -30,14 +31,6 @@ Loop infinito:
 3. Si hay diferencia, tomar acciones (mediante los controladores).
 ```
 
-### Componentes de la red del cluster
-
-* **Pod IP**: cada Pod tiene IP única en el cluster y cambia si el Pod se recrea.
-* **Service Cluster-IP**: IP virtual estable, no cambia y solo es accesible dentro del cluster.
-* **Service Node-Port**: para exponer el servicio en un puerto de cada nodo donde tiene pods el servicio, con este puerto ya podemos acceder al servicio externamente, no solo desde dentro del cluster, para acceder al servicio en alguno de los nodos es con `<NodeIP>:<NodePort>`.
-* **Service Load-Balancer**: solo en clouds públicos, crea un balanceador de carga externo.
-* **CNI (Container Network Interface)**: modelo de red, Minikube usa `bridge` o `calico` por defecto, pero existe también `flannel`, `cilium` o `weave`.
-
 ### Volúmenes
 
 Los volúmenes son unidades de almacenamiento persistente, similar a los que se usan en Docker pero en Kubernetes son mucho más potentes. Hay varios tipos de volúmenes y cada uno de ellos tiene un ciclo de vida y alcance diferente (ver abajo los ejemplos YAML para crear volúmenes).
@@ -46,12 +39,16 @@ Los volúmenes son unidades de almacenamiento persistente, similar a los que se 
 * **Persistent Volume (PV)**: recurso de almacenamiento asociado al cluster, existe independientemente de los Pods.
 * **Persistent Volume Claim (PVC)**: solicitud de almacenamiento, ej. un Pod hace un PVC `"Quiero 5GB de disco"` y Kubernetes le enlaza el espacio con un PV.
 
+## Herramientas para simular un cluster de Kubernetes
 
-### Minikube
+Kubernetes es open-source y por lo tanto hay varias herramientas para simular un cluster de Kubernetes en una máquina local, cada uno con sus ventajas sobre otros, a continuación describo los dos principales:
 
-Al ser Kubernetes open-source, pueden existir implementaciones diferentes adaptadas para la infraestructura objetivo. En nuestro caso, usaré `Minikube` que es una implementación de Kubernetes para una computadora local que simula un cluster de Kubernetes de un solo nodo.
+* **Minikube (Windows, Mac, Linux)**: es una implementación de Kubernetes para una máquina local que simula un cluster de un solo nodo, dicho nodo se simula en una máquina virtual o un contenedor, depende del driver que se esté usando el cual se puede consultar con `minikube profile list`. Además, dicho nodo cumple dos funciones Worker y Control Plane, es decir que ejecuta los servicios que administran el cluster y también despliega aplicaciones. El cluster se inicia y apaga con comandos `minikube start` y `minikube stop`, además necesita de Docker para funcionar, por lo tanto hay que tener corriendo Docker (Windows, Mac, Linux) o Docker Desktop (Windows, Mac) para que funcione. Su ventaja es que está más apegado a una implementación de producción de Kubernetes y por lo tanto soporta muchas funcionalidades de Kubernetes.
+* **Docker Desktop (Windows, Mac)**: en Docker Desktop hay una sección llamada `Kubernetes` que contiene un botón para iniciar y apagar el cluster, además permite virtualizar uno o más nodos, la ventaja es que funciona completamente integrado con el docker daemon de Docker Desktop por lo que no crea máquina virtual separada y así consume menos recursos, la desventaja que leí decía que soporta menos funcionalidades que `Minikube` y además no puedes cambiar la versión de Kubernetes que se usará, no lo he probado en la práctica y no sé si ya cambiarían las cosas para este momento. Otra ventaja es que al venir integrado en el mismo Docker Desktop pues no se necesita tener 2 herramientas instaladas así que para desplegar en una máquina local funcionaría bien.
 
-#### Iniciar el cluster
+**IMPORTANTE**: podemos tener corriendo ambos clusters, el de Minikube y el de Docker Desktop, al mismo tiempo y decidir con cual interactuar, esto lo veremos en la sección de `Kubectl`.
+
+### Iniciar y apagar el cluster con Minikube
 
 Antes de iniciar el cluster tenemos que asegurarnos de que Docker está corriendo, si tenemos **Docker Desktop** en Windows instalado hay que iniciarlo. Una vez iniciado ejecutamos el siguiente comando:
 
@@ -59,31 +56,63 @@ Antes de iniciar el cluster tenemos que asegurarnos de que Docker está corriend
 minikube start
 ```
 
-otros comandos de minikube:
+Apagar: ejecutamos el comando
 ```bash
-# SSH al nodo de Minikube
-minikube ssh
-
-# Una vez dentro podremos explorar sus procesos:
-# Ver procesos del kubelet
-ps aux | grep kubelet
-# Ver reglas de iptables (Services)
-sudo iptables-save | grep <service-name>
+minikube stop
 ```
 
-### Kubectl
+También lo podemos eliminar con:
+```bash
+minikube delete
+```
 
-Kubernetes tiene una API tipo REST via HTTP llamada `API Server` (`kube-apiserver`) para poder interactuar y darle instrucciones cuando queramos realizar alguna actualización en el cluster. Hay varias herramientas oficiales que sirven de intermediarias con las cuales podemos interactuar con la API de manera más sencilla sin tener que realizar las peticiones HTTP nosotros mismos, algunas son:
+### Iniciar y apagar el cluster con Docker Desktop
 
-* `kubectl`: una interfaz de linea de comandos integrada en Kubernetes.
-* Librerías para distintos lenguajes de programación: **Python**, **C**, **Javascript** entre otros.
+Iniciar:
 
-En nuestro caso usaremos `kubectl` pero no debería ser difícil implementar automatizaciones mediante las librerías de los lenguajes mencionados anteriormente.
+* Solo hay que ir a la sección `Kubernetes`.
+* Presionar el botón `Create Cluster`.
+* Configurar el cluster (aunque podemos configurarlo también una vez esté iniciado).
+* Presionamos el botón `Create` una vez lista la configuración.
+* Presionamos el botón `Install` en la nueva ventana, será tardado solo la primera vez.
 
+Apagar:
+* Solo presionamos el botón `Stop` en la sección de `Kubernetes`.
 
-## Flujos de trabajo
+## Kubectl (modelo de comunicación imperativo)
 
-A continiuación se organizan flujos básicos de trabajo para desarrollar alguna actividad de principio a fin:
+Recordemos que Kubernetes tiene un centro de comunicación llamado `API Server` (`kube-apiserver`) el cual funciona mediante una API HTTP tipo REST. Con esta podemos interactuar y darle instrucciones cuando queramos realizar alguna actualización en el cluster o consultar información del cluster. A este tipo de comunicación se le llama **Modelo imperativo** ya que se le dice que hacer paso por paso `kubectl describe pod <nombre>`.
+
+Lo bueno es que no es necesario interactuar forzosamente mediante dicha API HTTP, sino que Kubernetes viene integrado con una herramienta llamada `kubectl` que funciona mediante una interfaz de comandos (Command Line Interface - CLI) y se encarga de recibir comandos y convertirlos a peticiones HTTP propias para el API Server y además realizar las peticiones y mostrarnos las respuestas en forma más legible.
+
+**⚠️ Importante**: para facilitar la automatización de interacción con el API Server, también hay librerías oficiales para distintos lenguajes de programación como **Python**, **C**, **Javascript** entre otros.
+
+### Apuntar kubectl a Minikube o a Docker Desktop
+
+Como habíamos mencionado anteriormente, podemos tener corriendo el cluster de Minikube y el de DOcker Desktop al mismo tiempo, la herramienta `kubectl` puede informarnos los clusters que están corriendo (les llama contextos) y nos permite redirigirla al cluster que queramos.
+
+Para saber cuales son los clusters (contextos) disponibles:
+```bash
+kubectl config get-contexts
+```
+Nos mostrará algo como (marcanado con arterisco el cluster seleccionado):
+```
+CURRENT   NAME             CLUSTER          AUTHINFO         NAMESPACE
+          docker-desktop   docker-desktop   docker-desktop
+*         minikube         minikube         minikube         default
+```
+
+Podemos seleccionar otro cluster:
+```bash
+# Sintaxis
+kubectl config use-context <context-name>
+# Ejemplo
+kubectl config use-context docker-desktop
+```
+
+### Ejemplos de comandos de kubectl
+
+Manejar el cluster mediante comandos no es lo ideal, ya que solo permite aplicar una configuración a la vez y además no es versionable, hay una mejor forma que es mediante archivos YAML que tiene una estructura mucho más legible y sí es versionable. De todas formas, lo que sí es útil con comandos es consultar el estado del cluster, por eso veremos algunos ejemplos a continuación.
 
 * Crear un deployment en base a una imagen, exponerlo, levantarlo, revisarlo:
     ```bash
@@ -140,9 +169,7 @@ A continiuación se organizan flujos básicos de trabajo para desarrollar alguna
     kubectl delete namespace <namespace-name>
     ```
 
-### Flujo de ejecución de los procesos de eliminación
-
-A continuación se describe lo que ocurre internamente al eliminar algún recurso.
+### ¿Qué ocurre internamente cuando eliminamos algún recurso del cluster?
 
 Eliminar un Deployment:
 * **Comando**: `kubectl delete deployment <deploy-name>`
@@ -158,8 +185,7 @@ Eliminar un Pod:
 
 ### Actualización en vivo
 
-Una funcionalidad de Kubernetes muy importante es que permite realizar actualizaciones a los deployments en vivo sin tener que apagarlas o reiniciarlas manualmente, solo le indicas el cambio que quieres y Kubernetes lo realiza de la manera más adecuada y automáticamente. Algunos ejemplos son los siguientes:
-
+Una funcionalidad de Kubernetes muy importante es que permite realizar actualizaciones a los deployments en vivo sin tener que apagar o reiniciar el cluster, solo se le indica el cambio y Kubernetes lo realiza de la manera más adecuada y automáticamente. Algunos ejemplos son los siguientes:
 
 * Cambiar el número de replicas de la aplicación:
     * Comando: `kubectl scale deployment <deploy-name> --replicas=<nuevas-replicas>`
@@ -177,46 +203,43 @@ Una funcionalidad de Kubernetes muy importante es que permite realizar actualiza
     * **Descripción**: estamos indicando que queremos deshacer los últimos cambios del recurso tipo `deployment` con nombre `mi-app`.
     * **Acciones**: Kubernetes realiza los cambios gradualmente sin interrumplir el funcionamiento. 
 
-### Modelo de comunicación imperativo y declarativo
+## Archivos YAML (modelo de comunicación declarativo)
 
-Hay dos formas e indicarle a Kubernetes qué hacer:
+Además de poder actualizar el cluster con `kubectl`, también podemos realizarlo más eficientemente a escala mediante archivos YAML. A este tipo de comunicación se le llama **Modelo declarativo**. En un mismo archivo YAML podemos describir uno o más recuros (Pod, Deployment, Service, Secret, Congig Map, Persistent Volume, Persistent Volume Clain, etc) y Kubernetes se encargará de llevar el estado de dichos recursos al descrito en el archivo YAML, es decir, si los recursos no existen los crea y si ya existen los actualiza, además registra un historial de actualizaciones para poder regresar en caso de errores.
 
-* **Modelo imperativo**: es mediante comandos con `kubectl` como `kubectl describe pod <nombre>`, le dices que hacer paso por paso.
-* **Modelo declarativo**: es mediante un archivo **YAML** como el siguiente, en este le describes el estado final al que quieres que lleguen tus deployments, tomando en cuenta pods, deployments, etc, y Kubernetes calcula los pasos para llegar ahí desde el estado actual.
-  ```yaml
-  apiVersion: apps/v1
-  kind: Deployment
-  metadata:
-  name: mi-nginx
-  spec:
-  replicas: 2
-  selector:
-    matchLabels:
-    app: nginx
-  template:
-    metadata:
-    labels:
-      app: nginx
-    spec:
-    containers:
-    - name: nginx
-      image: nginx
-      ports:
-      - containerPort: 80
-  ```
-
-
-El modo preferido es el declarativo que es mediante archivos YAML, ya que es más predecible y además versionable con herramientas como Git.
-
-## Estrucrura del archivo YAML
-
-A continuación revisaremos ejemplos de algunas configuraciones que se pueden especificar en un archivo YAML para crear un recurso, en este caso un Pod. Se revisarán las configuraciones gradualmente solo manteniendo en cada ejemplo las nuevas configuraciones junto con sus ancestros para no perder la estructura.
+Este es el modelo preferido ya que es más predecible y además versionable con herramientas como Git.
 
 Reglas del formato YAML:
 * YAML usa espacios, no tabulaciones.
 * Cada nivel de identación es de 2 espacios, no de 4.
 
-#### Ejemplo básico para crear un Pod:
+A continuación un ejemplo sencillo de un deployment que contiene un Pod con un solo contenedor `nginx` escuchando en el puerto `80`, pero levanta 2 réplicas de dicho Pod.
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mi-nginx
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        ports:
+        - containerPort: 80
+```
+
+### Pod
+
+A continuación revisaremos ejemplos de algunas configuraciones que se pueden especificar en un archivo YAML para crear un recurso, en este caso un Pod. Se revisarán las configuraciones gradualmente solo manteniendo en cada ejemplo las nuevas configuraciones junto con sus ancestros para no perder la estructura.
 
 ```yaml
 # Archivo YAML
@@ -230,7 +253,7 @@ spec: # especificación del recurso
     image: nginx # imágen de Docker que usará el contenedor
 ```
 
-#### Más configuraciones para los metadatos
+#### Pod - Metadatos
 
 ```yaml
 metadata:
@@ -244,7 +267,7 @@ metadata:
     createdBy: "juan"
 ```
 
-#### Más configuraciones para puertos y ejecución de los contenedores:
+#### Pod - Contenedor - puertos y ejecución
 
 ```yaml
 spec:
@@ -258,7 +281,7 @@ spec:
     args: ["-g", "daemon off;"] # argumentos para el comando (sobreescribe CMD de la imagen)
 ```
 
-#### Configuraciones de variable sde entorno para el contenedor
+#### Pod - Contenedor - configuraciones de variables de entorno
 
 ```yaml
 spec:
@@ -279,7 +302,7 @@ spec:
           key: password # nombre de la entrada a montar, en este caso la entrada es una única llave.
 ```
 
-#### Más configuraciones para recursos del sistema para el contenedor
+#### Pod - Contenedor - recursos del sistema
 
 ```yaml
 spec:
@@ -294,7 +317,7 @@ spec:
         cpu: "500m"
 ```
 
-#### Configuraciones para prueba de vida de los contenedores
+#### Pod - Contenedor - prueba de vida
 
 ```yaml
 spec:
@@ -318,7 +341,7 @@ spec:
       #...configuraciones similares a `livenessProbe`
 ```
 
-#### Configuraciones para volúmenes básicos
+#### Pod - Contenedor - volúmenes
 
 ```yaml
 spec:
@@ -371,9 +394,11 @@ Tipos de volúmenes:
 * `persistentVolumeClaim`: define un PVC como volumen. Sus configuraciones son:
     * `claimName`: nombre del PVC a usar.
 
-#### Ejemplo de YAML para un Deployment
+### Deployment
 
-Ahora en lugar de definir un Pod, definiremos la estructura de un Deployment, comenzaremos con algo básico. Obviamente la mayoría de las configuraciones son opcionales.
+Un deployment es el siguiente nivel después de un Pod, ya que además de describir las características de la aplicación, también permite describir un Pod dentro de la sección `spec.template`, dentro de esta sección es donde podemos usar todo lo que vimos anteriormente de Pod.
+
+Kubernetes es muy flexible, y por esa razón tenemos que asignarele una o más etiquetas a los Pods, de esta forma podemos indicar cuales Pods estarán corriendo en el deployment especificando en la sección `spec.selector.matchLabels` las etiquetas que queramos que concuerden. Así podemos crear los Pods fuera del Deployment y usar las etiquetas para integrarlos en el Deployment.
 
 ```yaml
 apiVersion: apps/v1 # versión usada para deployments
@@ -404,7 +429,7 @@ spec:
         - containerPort: 80
 ```
 
-#### Ejemplo de YAML para un Service
+### Service
 
 Ahora veremos un ejemplo para definir un Service en un archivo YAML, también las mayoría de las configuraciones son opcionales.
 
@@ -428,7 +453,24 @@ spec:
 En resumen, especifica el camino a seguir de una petición desde el nodo hasta el contenedor:
 `http://<IP-del-Nodo>:<nodePort> -> http://<service-name>:<port> -> http://<container-name>:<targetPort>`.
 
-#### Ejemplo YAML para crear entradas para el configMap
+Componentes de la red del cluster:
+
+* **Pod IP**: cada Pod tiene IP única en el cluster y cambia si el Pod se recrea.
+* **Service Cluster-IP**: IP virtual estable, no cambia y solo es accesible dentro del cluster.
+* **Service Node-Port**: para exponer el servicio en un puerto de cada nodo donde tiene pods el servicio, con este puerto ya podemos acceder al servicio externamente, no solo desde dentro del cluster, para acceder al servicio en alguno de los nodos es con `<NodeIP>:<NodePort>`.
+* **Service Load-Balancer**: solo en clouds públicos, crea un balanceador de carga externo.
+* **CNI (Container Network Interface)**: modelo de red, Minikube usa `bridge` o `calico` por defecto, pero existe también `flannel`, `cilium` o `weave`.
+
+
+Podemos revisar las IP-Tables:
+```bash
+# Entrar nodo de Minikube
+minikube ssh
+# Ver reglas de iptables (Services)
+sudo iptables-save | grep <service-name>
+```
+
+### configMap
 
 Recordemos que los `configMap` se almacenan en el componente `etcd` de Kubernetes. Aquí veremos como crear un `configMap`, los ConfigMaps se usan para almacenar configuraciones de las aplicaciones y cada uno puede contener varias entradas con lo cual podemos almacenar todas las configuraciones de una app o de un servicio en un mismo `configMap`.
 
@@ -447,7 +489,7 @@ data:
     max.connections=100
 ```
 
-#### Ejemplo YAML para crear entradas de Secret
+### Secret
 
 Similar al los Config Maps solo que, en este caso, los Secrets se usan para almacenar credenciales, certificados criptográficos, y todos tipo de información altamente sensible. Los secrets deben ser almacenados en codifiación `base64`. También se almacenan en el `etcd` y pueden ser encriptados si se configura el `encryption-at-rest`. Estos solo se envían a los nodos que tienen al menos un Pod que los necesita. Kubelet guarda los Secrets en RAM, y son montados en los contenedores como archivos en memoria y al morir el Pod el Secret se elimina de la memoria.
 
@@ -501,8 +543,7 @@ Tipos de Secret:
     type: kubernetes.io/service-account-token
     ```
 
-#### Ejemplo YAML para crear Persistent Volume (PV) y Persistent Volume Claim (PVC)
-
+### Persistent Volume (PV)
 
 **Persistent Volume (PV)**: recurso de almacenamiento asociado al cluster, existe independientemente de los Pods, es como una unidad de almacenamiento virtual y podemos reservar espacio de esta unidad para un Pod mediante un Persistent Volume Claim (PVC).
 
@@ -538,7 +579,9 @@ Tipos de Storage Class:
 * `manual`: crearlo manualmente ya sea con comandos o con YAML (ver ejemplos abajo).
 * Además de creación manual, podemos usar StorageClass para creación automática en provedores en la nube como (AWS, Azure, GCE, etc), no voy a entrar en detalle pero solo lo documento para futura investigación. Para usar un Storage Class, primero tenemos que crearlo con YAML donde indicamos las configuraciones de creación en el provedor deseado.
 
-**Persistent Volume Claim (PVC)**: solicitud de almacenamiento de un Pod para reservar espacio en un PV, algo como `"Quiero 5GB de disco"` y Kubernetes le enlaza el espacio con un PV. Aquí solo lo estamos creando, pero nocesitamos enlazarlo a un contenedor creando un volumen para el PVC en `volumes` y montando el volumen con `volumeMounts` (ver ejemlos arriba).
+### Persistent Volume Claim (PVC)
+
+Es una solicitud de almacenamiento de un Pod para reservar espacio en un PV, algo como `"Quiero 5GB de disco"` y Kubernetes le enlaza el espacio con un PV. Aquí solo lo estamos creando, pero nocesitamos enlazarlo a un contenedor creando un volumen para el PVC en `volumes` y montando el volumen con `volumeMounts` (ver ejemlos arriba).
 
 Ciclo de vida: PVC creado → Bound a PV → Pod usa PVC → Pod muere → PVC sigue existiendo → Datos persisten.
 
@@ -556,7 +599,7 @@ spec:
   storageClassName: manual # Debe coincidir con PV
 ```
 
-#### Ejmplo de puesta en práctica para un Deployment con almacenamiento persistente para MySQL
+### Ejmplo práctico y completo para un Deployment con almacenamiento persistente para MySQL
 
 ```yaml
 # Secret con credenciales para MySQL
@@ -625,7 +668,7 @@ spec:
           claimName: mysql-pvc
 ```
 
-#### Instrucciones para validar un archivo YAML
+### Instrucciones para validar un archivo YAML
 
 ```bash
 # Validar sintaxis sin crear
@@ -635,7 +678,7 @@ kubectl apply -f mi-archivo.yaml --dry-run=client
 kubectl apply -f mi-archivo.yaml --dry-run=server -o yaml
 ```
 
-#### Comandos para aplicar/desaplicar un archivo YAML al cluster
+### Comandos para aplicar/desaplicar un archivo YAML al cluster
 
 ```bash
 # Aplicar
@@ -644,7 +687,7 @@ kubectl apply -f <file>.yaml
 kubectl delete -f <file>.yaml
 ```
 
-### Como hacer uso de una app levantada con un deployment
+## Como hacer uso de una app levantada con un deployment
 
 Una vez que el Deployment está corriendo en Kubernetes junto con un Service, ya podemos acceder a la app mediante la URL del nodo y el puerto que hayamos configurado en `nodePort` del Service:
 ```
@@ -657,7 +700,7 @@ minikube profile list
 
 El problema es que el Nodo está en una red virtual aislada del host por seguridad, así que no será posible acceder a la app desde el host de manera directa, pero a continuación vemos algunas formas de acceder de manera indirecta.
 
-#### Conectarse al nodo virtual via SSH y hacer peticiónes desde ahí:
+### Conectarse al nodo virtual via SSH y hacer peticiónes desde ahí:
 
 * Primero obtenemos la IP del nodo:
     ```bash
@@ -672,7 +715,7 @@ El problema es que el Nodo está en una red virtual aislada del host por segurid
     curl http://192.168.49.2:30801
     ```
 
-#### Crear un tunel temporal desde el host hacia el nodo virtual
+### Crear un tunel temporal desde el host hacia el nodo virtual
 
 Con esta forma podremos acceder a la app como si estuviera corriendo en el host (127.0.0.1), solo tenemos que crear un tunel (port-forward) entre el host y el nodo virtual, como si el host fuera el nodo:
 ```bash
@@ -690,7 +733,7 @@ minikube service -h
 
 ⚠️ En cualquier caso la terminal queda bloqueada porque el tunel queda corriendo, podemos cerrar el tunel con `CTRL+C` en cuyo caso la app dejará de respoder en la URL local.
 
-#### Crear un tunel temporal a un Deployment, Pod o Service directamente
+### Crear un tunel temporal a un Deployment, Pod o Service directamente
 
 En el método anterior, se creaba un tunel desde el host hacia el nodo virtual de minikube. En este caso veremos como crear un tunel del host directamente a un Depolyment, Pod o Service, es útil para realizar pruebas hacia algún enpoint o conjunto de endpoints. La sintaxis general es:
 ```bash
@@ -765,7 +808,7 @@ El flujo completo para integrar una imágene en un deployment sería el siguient
     ```
 
 
-# Glosario de comandos
+# Glosario de comandos para kubectl
 
 Algunos de los comandos básicos y principales son los siguientes:
 
