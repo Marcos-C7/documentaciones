@@ -188,6 +188,22 @@ Podemos escanear las imágenes para buscar vulnerabilidades de una base de datos
   ```
 NOTA: Podemos escanear incluso las imágenes que están en Docker-hub, como las imágenes base que queremos usar.
 
+### Descargar/cargar imágenes desde el docker daemon
+
+Una vez que construimos nuestra imágen con el comando `docker build`, podemos compartir la imágen de dos formas, una es subiéndola a un registro como Docker Hub (gratis y público) o GitHub Container Registry (Privado y gratis), y la otra forma es descargar la imágen desde el docker daemon. Por ahora solo documentaremos como descargarla desde el docker daemon y como cargarla al docker daemon en otra computadora.
+
+```bash
+# Guarda la imagen en un archivo
+docker save <iamge-name>:<tag> -o <output-file>.tar
+# Ejemplo
+docker save django/web:0.0.0 -o django-web-0.0.0.tar
+
+# Cargar la imágen desde un archivo
+docker load -i <output-file>.tar
+# Ejemplo
+docker load -i django-web-0.0.0.tar
+```
+
 ## Administrar contenedores
 
 Una vez un creado un contenedor, podemos manejarlo con los siguientes comandos:
