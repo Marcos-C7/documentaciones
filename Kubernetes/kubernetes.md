@@ -439,7 +439,7 @@ kind: Service
 metadata:
   name: mi-service
 spec:
-  type: NodePort # Tipo de Service, también hay `ClusterIP` (solo acceso interno), `LoadBalancer`, `ExternalName`.
+  type: NodePort # Tipo de Service, `NodePort` (exposición al exterior, desarrollo local), `ClusterIP` (solo acceso interno para servicios que no serán expuestos al exterior), `LoadBalancer` (exposición al exterior, al subir a la nube), `ExternalName`.
   selector: # Qué Pods incluir en el servicio
     app: mi-app
   ports:
@@ -687,6 +687,8 @@ kubectl apply -f <file>.yaml
 kubectl delete -f <file>.yaml
 ```
 
+**⚠️ Importante**: si especificamos un directorio en lugar de un archivo YAML, entonces se aplicarán todos los archivos YAML que se encuentren en el directorio.
+
 ## Como hacer uso de una app levantada con un deployment
 
 Una vez que el Deployment está corriendo en Kubernetes junto con un Service, ya podemos acceder a la app mediante la URL del nodo y el puerto que hayamos configurado en `nodePort` del Service:
@@ -751,6 +753,30 @@ kubectl port-forward pod/mi-pod 8888:5000
 ⚠️ En este caso como nosotros definimos el puerto, este puede quedar igual, a diferencia del tunel hacia el nodo.
 
 ⚠️ En cualquier caso, la terminal quedará bloqueada con el puente abierto, el cual puede cerrarse con `CTRL+C`.
+
+### Simular un cluster real en la nube
+
+Cuando usamos Kubernetes en un cluster real en la nube no necesitamos ningún tunel ni nada, desafortunadamente en clusters simulados localmente no hay forma de evitarlo ya que el cluster se simula en una máquina virtual la cual no está expuesta al exterior.
+
+Otra forma de hacer uso de los servicios desde el host es cambiar los servicios de tipo `NodePort` a `LoadBalancer`:
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: mi-service
+spec:
+  type: LoadBalancer # <-- aquí se realiza el cambio
+  # ... demás configuraciones
+```
+
+**⚠️ Importante**: de hecho esta es la mejor estrategia uando `type: LoadBalancer` ya que así es como se tiene que definir al subir a la nube, ya que los servicios expuestos deben poder ser accedidos en el puerto fijo definido en el archivo YAML.
+
+Una vez así, y habiendo aplicado los cambios al cluster, ejecutamos el siguiente comando en una terminal, la cual quedará bloqueada, para abrir un tunel hacia los servicios de tipo LoadBalancer:
+```bash
+minikube tunnel
+```
+
+Con eso ya podremos conectarnos a los servicios de tipo `LoadBalancer` directamente desde el host via `http://127.0.0.1:<service-port>`, donde `<service-port>` es el puerto (`port`) que le hayamos configurado al servicio en el archivo YAML.
 
 ## Crear imágenes desde Dockerfile que puedan integrarse en un Deployment
 
