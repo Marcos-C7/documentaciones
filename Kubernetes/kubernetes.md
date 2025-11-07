@@ -257,7 +257,7 @@ spec: # especificación del recurso
 
 ```yaml
 metadata:
-  namespace: default # namespace para organizar los recursos creados y poder manejarlos en grupo, el valor por defecto es `default`
+  namespace: ni-namespace # namespace donde poner el Pod (opcional, por defecto es el namespace 'default')
   labels: # etiquetas para organizar y manejar en sub-grupos dentro del namespace, podemos inventar las que queramos
     app: mi-aplicacion
     tier: frontend
@@ -405,6 +405,7 @@ apiVersion: apps/v1 # versión usada para deployments
 kind: Deployment # tipo de recurso
 metadata:
   name: mi-deployment
+  namespace: ni-namespace # namespace donde poner el Deployment (opcional, por defecto es el namespace 'default')
   labels:
     app: mi-app
 spec:
@@ -438,6 +439,7 @@ apiVersion: v1 # versión para Services
 kind: Service
 metadata:
   name: mi-service
+  namespace: ni-namespace # namespace donde poner el Service (opcional, por defecto es el namespace 'default')
 spec:
   type: NodePort # Tipo de Service, `NodePort` (exposición al exterior, desarrollo local), `ClusterIP` (solo acceso interno para servicios que no serán expuestos al exterior), `LoadBalancer` (exposición al exterior, al subir a la nube), `ExternalName`.
   selector: # Qué Pods incluir en el servicio
@@ -479,6 +481,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: app-config # nombre del config map, todas las entradas definidas serán asociadas en este
+  namespace: ni-namespace # namespace donde poner el ConfigMap (opcional, por defecto es el namespace 'default')
 data:
   database.conf: | # nombre de la entrada seguida por los datos en formato llave=valor
     host=postgres.default.svc.cluster.local
@@ -501,6 +504,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: db-secret # nombre del secret
+  namespace: ni-namespace # namespace donde poner el Secret (opcional, por defecto es el namespace 'default')
 type: Opaque # Tipo genérico
 data: # datos, podemos agregar tantos como queramos
   username: YWRtaW4= # "admin" en base64
@@ -554,6 +558,7 @@ apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: pv-local # nombre del volumen
+  namespace: ni-namespace # namespace donde poner el PV (opcional, por defecto es el namespace 'default')
 spec:
   capacity:
     storage: 10Gi # Tamaño
@@ -562,7 +567,7 @@ spec:
   - ReadWriteOnce # más modos abajo
   persistentVolumeReclaimPolicy: Retain # Retain, Delete, Recycle
   storageClassName: manual # Clase de almacenamiento
-  hostPath: # Tipo de volumen (hostPath solo para testing)
+  hostPath: # Al indicar esto especificamos que el volumen se genere en el directorio especificado
     path: /mnt/data
 ```
 
@@ -579,6 +584,32 @@ Tipos de Storage Class:
 * `manual`: crearlo manualmente ya sea con comandos o con YAML (ver ejemplos abajo).
 * Además de creación manual, podemos usar StorageClass para creación automática en provedores en la nube como (AWS, Azure, GCE, etc), no voy a entrar en detalle pero solo lo documento para futura investigación. Para usar un Storage Class, primero tenemos que crearlo con YAML donde indicamos las configuraciones de creación en el provedor deseado.
 
+#### Persistent Volumes en Minikube
+
+En Minikube no necesitamos crear un PV explícitamente, ya que si no específicamos un PV al momento de aplicar un PVC Minikube creará automáticamente un volumen de tipo `hostPath` dentro del nodo virual (recordemos que podemos entrar a este con `minikube ssh`) específico para el namespace, y dentro de dicho directorio creará una carpeta para cada PCV. Las rutas se verían como:
+```bash
+# PV dir
+/tmp/hostpath-provisioner/<namespace>/
+# PVC dir
+/tmp/hostpath-provisioner/<namespace>/<pvc-name>/
+```
+
+Estos volúmenes automáticos son de tipo `persistentVolumeReclaimPolicy: Retain`, así que los datos persisten al reinicio del Pod. Pero pues obviamente si eliminamos el nodo virtual `minikube delete` se pierde todo lo que contiene, incluidos los volúmenes.
+
+Podemos copiar cualquier directorio desde un PV, hacia el host:
+```bash
+# Sintaxis:
+minikube cp <namespace>/<pvc-name>:/tmp/hostpath-provisioner/<namespace>/<...>/ <host-dir>
+```
+
+O podemos subir archivos al PVC:
+```bash
+# Sintaxis:
+minikube cp <host-dir> <namespace>/<pvc-name>:/tmp/hostpath-provisioner/<namespace>/<...>/
+```
+
+**⚠️ Importante**: en producción, es decir, en un cluster en la nube, lo adecuado es manejar los volúmenes con provisionamiento dinámico creando un `StorageClass` en lugar de un PV.
+
 ### Persistent Volume Claim (PVC)
 
 Es una solicitud de almacenamiento de un Pod para reservar espacio en un PV, algo como `"Quiero 5GB de disco"` y Kubernetes le enlaza el espacio con un PV. Aquí solo lo estamos creando, pero nocesitamos enlazarlo a un contenedor creando un volumen para el PVC en `volumes` y montando el volumen con `volumeMounts` (ver ejemlos arriba).
@@ -590,6 +621,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: pvc-local # nombre del claim
+  namespace: ni-namespace # namespace donde poner el PVC (opcional, por defecto es el namespace 'default')
 spec:
   accessModes:
   - ReadWriteOnce # Debe coincidir con la definición en el PV
@@ -598,6 +630,115 @@ spec:
       storage: 5Gi # Cantidad que necesito (≤ PV)
   storageClassName: manual # Debe coincidir con PV
 ```
+
+Consultar los PVC existentes:
+```bash
+kubectl get pv
+```
+
+### Namespaces
+
+Esta parte es importante ya que el uso de namespaces es muy importante pero puede llevar a confusiones. Cuando ejecutamos comandos para revisar el estado de nuestros recursos (Pods, Deployments, etc) como:
+```bash
+kubectl get all
+kubectl get pods
+# ... etc
+```
+solo se revisa el namespace actualmente activo que al inicio es `default`.
+
+Nosotros podemos crear nuestro propio Namespace como se ve a continuación:
+```yaml
+apiVersion: v1
+kind: Namespace # tipo de recurso
+metadata:
+  name: django-prod # Nombre del namespace
+```
+
+Ahora si podemos usar ese namespace en cada uno de los recursos, el problema es que al revisar cualquier estado de los recursos necesitamos especificar el namespace a consultar, si no especificamos ninguno se buscará en el namespace actual, que por defecto es `default` pero se puede cambiar como veremos más adelante.
+```bash
+kubectl get all -n <namespace>
+kubectl get pods -n <namespace>
+kubectl get services -n <namespace>
+# ... etc
+```
+
+Si no queremos estar especificando el namespace, podemos establecerlo como actual con:
+```bash
+kubectl config set-context --current --namespace=<namespace>
+```
+
+Así podremos usar los comandos sin necesidad del namespace: `kubectl get all`, etc.
+
+### Horizontal Pod Autoscaler
+
+Con estos recursos podemos dejar que Kubernetes monitoree nuestros Deployments para que escale los Pods automáticamente, podemos definir un mínimo y un máximo de Pods, y especificar en base a qué recursos del sistema se tomen las decisiones (cpu, ram, etc).
+
+```yaml
+# Horizontal Pod Auto-scaler: automatically scales the number of Django pod replicas based on CPU, memory, or custom metrics
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: mi-hpa
+  namespace: ni-namespace
+spec:
+  scaleTargetRef: # etiquetas para seleccionar el Deployment
+    apiVersion: apps/v1
+    kind: Deployment
+    name: djangoweb
+  minReplicas: 1 # Mínimo de réplicas
+  maxReplicas: 2 # Máximo de réplicas
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30 # segundos excediendo la utilización antes de escalar hacia arriba
+    scaleDown:
+      stabilizationWindowSeconds: 300 # segundos por debajo de la utilización antes de escalar hacia abajo
+  metrics: # Méticas a considerar para las decisiones
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70 # sube pods si CPU > 70%
+```
+
+Para que todo quede bien definido, lo recomendable es especificar recursos mínimos para el contenedor en el Deployment en `spec.template.spec.containers.resources.requests`. Ya que el porcentaje que definamos de utilización en el HPA será respecto a los que definamos en el Deployment.
+
+También es necesario asegurarnos de que el addon `metrics-server` esté habilitado
+```bash
+# Habilitarlo
+minikube addons enable metrics-server
+
+# Revisar que está corriendo, deberíamos ver una entrada llamada 'metrics-server-<...>' con STATUS=Running
+kubectl get pods -n kube-system
+```
+
+Para revisar el comportamiento del HPA, usamos el siguiente comando:
+```bash
+kubectl get hpa <hpa-name>
+
+# Aunque también lo podemos ver entre todos los recursos con
+kubectl get all
+```
+
+También podemos indicar a la temrinal que refresque automáticamente el comando para no tener que estarlo ejecutando muchas veces manualmente, así tendremos un monitoreo en tiempo real. En el caso de Powershell es con:
+```bash
+while ($true) { kubectl get hpa <hpa-name>; Start-Sleep -Seconds 1; cls }
+
+# O para estar monitoreando todos los recursos
+while ($true) { kubectl get all; Start-Sleep -Seconds 1; cls }
+```
+
+Podemos simular una carga de peticiones al un servicio deseado, solo debemos asegurarnos de que el nombre del servicio sea un HOST permitido en la aplicación que responde las peticiones (como ALLOWED_HOSTS en Django):
+```bash
+# Creamos un Pod auxiliar con alpine y que nos deje en modo terminal dentro del Pod
+kubectl run test --image=alpine -it --rm
+# Instalamos el generador de carga `wrk`
+apk add --no-cache wrk
+# Generamos carga: wrk -t<hilos> -c<conexiones-concurrentes> -d<tiempo-de-carga> http://<service-name>:[port]
+wrk -t4 -c100 -d30s http://nginx
+```
+
+Con eso podremos ver al consultar el estado del HPA que las réplicas se ajustan automáticamente a la carga al exceder/bajar la utilización definida por el tiempo definido. Una nota importante es que el sistema de monitoreo de Minikube, no sé si será en general en Kubernetes, tiene un retardo, así que cuando realicemos la carga de trabajo tomará varios segundos `~1min` antes de que esa carga se vea reflejada en el monitoreo y como el auto-scaler se basa en dichas métricas pues hasta ese momento comenzará a contar el tiempo de excedido/bajada de utilización.
 
 ### Ejmplo práctico y completo para un Deployment con almacenamiento persistente para MySQL
 
@@ -686,6 +827,8 @@ kubectl apply -f <file>.yaml
 # Desaplicar
 kubectl delete -f <file>.yaml
 ```
+
+### 
 
 **⚠️ Importante**: si especificamos un directorio en lugar de un archivo YAML, entonces se aplicarán todos los archivos YAML que se encuentren en el directorio.
 
@@ -833,8 +976,22 @@ El flujo completo para integrar una imágene en un deployment sería el siguient
             - containerPort: 8000
     ```
 
+## Debug
 
-# Glosario de comandos para kubectl
+Revisemos algunos comandos útiles para debuguear problemas.
+
+Podemos ejecutar cualquier comando desde casi cualquier recurso como Pod, Deployment, Service, etc:
+```bash
+# Sintaxis
+kubectl exec -it <resource-type>/<resource-name> -- <command>
+
+# Ejemplos
+# Hacer una petición desde el servicio de nginx hacia otro servicio
+kubectl exec -it service/nginx -- curl -v http://djangoweb:8001
+```
+
+
+## Glosario de comandos para kubectl
 
 Algunos de los comandos básicos y principales son los siguientes:
 
@@ -887,7 +1044,8 @@ Eliminar recursos:
 * `kubectl delete pod <pod-name>`: eliminar un Pod (Se recreará automáticamente por el ReplicaSet).
 
 Actualización:
-* `kubectl exec -it <pod-name> -- /bin/bash`: entrar a un contenedor en modo terminarl.
+* `kubectl exec -it <pod-name> -- /bin/bash`: entrar a un contenedor en modo terminal.
+* `kubectl exec -it deployment/<deploy-name> -- /bin/bash`: entrar a un deployment en modo terminal.
 * `kubectl scale deployment <deploy-name> --replicas=0`: detener los Pods del deployment sin eliminarlo.
 * `kubectl rollout pause deployment <deploy-name>`: pausa todas las actualizaciones pero sigue corriendo.
 * `kubectl rollout resume deployment <deploy-name>`: reanuda las actualizaciones.
