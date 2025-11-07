@@ -323,9 +323,9 @@ spec:
 spec:
   containers:
   - name: nginx
-    livenessProbe: # configuraciones para revisar si el contenedor sigue vivo, si falla se recrea el contenedor, para estas validaciones, el contenedor debe implementar el endpoint que retornará Código HTTP 200 si todo sigue bien. Hay otros mecanismos para realizar la prueba.
+    livenessProbe: # configuraciones para revisar si el contenedor sigue vivo, si falla se recrea el contenedor, para estas validaciones, el contenedor debe implementar el endpoint que retornará Código HTTP-200 si todo sigue bien.
       httpGet: # Tipo de petición que usa el endpoint del contenedor
-        path: / # url relativa a donde se hará la petición de la prueba dentro del contenedor
+        path: /health/ # url relativa a donde se hará la petición de la prueba dentro del contenedor
         port: 8081 # Puerto donde se hará la petición
         httpHeaders: # podemos agregar las cabeceras que queramos a la petición http
         - name: Custom-Header
