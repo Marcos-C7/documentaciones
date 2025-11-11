@@ -287,19 +287,24 @@ spec:
 spec:
   containers:
   - name: nginx
-    env: # lista de variables de entorno para el contenedor
+    env: # lista de variables de entorno para el contenedor (una por una)
     - name: ENVIRONMENT # nombre de la variable
       value: "production" # valor crudo de la variable
     - name: DATABASE_URL
-      valueFrom: 
-        configMapKeyRef: # Podemos sacar datos de los configMaps (ver abajo como crearlos con YAML)
-          name: app-config # nombre del config map a usar
-          key: database.conf # nombre de la entrada a usar (recordemos que un configmap puede tener varias entradas) cada entrada puede tener varias parejas llave=valor, me imagino que todas ellas se inyectan como variables de entorno.
+      valueFrom:
+        configMapKeyRef: # usar una entrada de un configMaps (ver abajo como crearlos con YAML)
+          name: app-config # nombre del configMap a usar
+          key: database.conf # nombre de la entrada a usar
     - name: DB_PASSWORD
       valueFrom:
-        secretKeyRef: # Podemos sacar datos de un Secret (ver abajo como crearlos con YAML)
+        secretKeyRef: # usar una entrada de un Secret (ver abajo como crearlos con YAML)
           name: db-secret # nombre del Secret a usar
-          key: password # nombre de la entrada a montar, en este caso la entrada es una única llave.
+          key: password # nombre de la entrada a usar
+    envFrom: # Enviar de golpe todas las entradas de un ConfigMap o un Secret
+    - configMapRef: # Todas las entradas de un configMap
+       name: djangoweb-config # nombre del configMap
+    - secretRef: # Todas las entradas de un Secret
+       name: postgres-secrets # nombre del Secret
 ```
 
 #### Pod - Contenedor - recursos del sistema
@@ -309,13 +314,26 @@ spec:
   containers:
   - name: nginx
     resources: # requerimientos de recursos para el contenedor
-      requests: # Recursos MINIMOS (el scheduler usa esto para decidir en qué nodo colocar el Pod)
+      requests: # Recursos MINIMOS (el scheduler usa esto para decidir en qué nodo colocar el Pod). 
         memory: "128Mi" # unidades de memoria (M=Megabytes, Mi=Mebibytes, G=Gigabyte, Gi=Gibibyte)
-        cpu: "250m" # unidades de CPU (1=un CPU completo, 500m=500 milicores=0.5CPU)
+        cpu: "250m" # unidades de CPU (1=un CPU completo, 500m=500milicores=0.5CPU)
       limits:
         memory: "256Mi"
         cpu: "500m"
 ```
+
+* `resources.requests`: son los recursos mínimos que queremos reservar para el contenedor, esto lo usará el Scheduler para determinar en qué nodo levantar el Pod.
+* `resources.limits`: es lo máximo de memoria que tendrá permitido usar el Pod, la regla es usar el doble de lo definido en `resources.requests`.
+* El porcentaje de utilización del CPU (`250m=25%CPU`) se refiere a los núcleos, por ejemplo `250m` es 25% de un núcleo, así que si queremos asignarle 2 núcleos entonces ponemos `2000m`.
+
+Recomendaciones para determinar los valores para `resources.requests`:
+
+* Una buena opción para determinar el CPU para `resources.requests` es integrar un **Horizontal Pod Autoscaler** en el Deployment del Pod que solo contemple CPU.
+* Luego generar carga artificial de acuerdo a lo que nos gustaría soportar en una sola réplica del Pod (revisar abajo en la sección de **Horizontal Pod Autoscaler**).
+* Primero definimos la carga deseada y vamos variando el CPU en `resources.requests` hasta el punto en que si le bajamos un poco entonces el autosacaler tendría que generar otra réplica. Reservamos memoria suficiente para que el esto no influya en el autoscaler.
+* Para el caso de CPU, si por ejemplo vimos que el valor del CPU fue `270m`, entonces ponemos `resources.requests.cpu=250m` y `resources.requests.cpu=500m`.
+* Para la memoria solo vemos cual es el pico y si fue de `300Mi`, entonces definimos `resources.requests.memory=256Mi` y `resources.requests.memory=512Mi`.
+
 
 #### Pod - Contenedor - prueba de vida
 
@@ -708,7 +726,8 @@ También es necesario asegurarnos de que el addon `metrics-server` esté habilit
 # Habilitarlo
 minikube addons enable metrics-server
 
-# Revisar que está corriendo, deberíamos ver una entrada llamada 'metrics-server-<...>' con STATUS=Running
+# Revisar que está corriendo, deberíamos ver una entrada llamada 'metrics-server-<...>' 
+# NOTA: tarda un minuto o dos en arrancar, revisar que el con READY=1/1 y STATUS=Running
 kubectl get pods -n kube-system
 ```
 
@@ -727,6 +746,10 @@ while ($true) { kubectl get hpa <hpa-name>; Start-Sleep -Seconds 1; cls }
 # O para estar monitoreando todos los recursos
 while ($true) { kubectl get all; Start-Sleep -Seconds 1; cls }
 ```
+También podemos monitorear el uso de CPU (en milicores) y de RAM de los Pods:
+```bash
+while ($true) { kubectl top pod --containers; Start-Sleep -Seconds 1; cls }
+```
 
 Podemos simular una carga de peticiones al un servicio deseado, solo debemos asegurarnos de que el nombre del servicio sea un HOST permitido en la aplicación que responde las peticiones (como ALLOWED_HOSTS en Django):
 ```bash
@@ -739,6 +762,31 @@ wrk -t4 -c100 -d30s http://nginx
 ```
 
 Con eso podremos ver al consultar el estado del HPA que las réplicas se ajustan automáticamente a la carga al exceder/bajar la utilización definida por el tiempo definido. Una nota importante es que el sistema de monitoreo de Minikube, no sé si será en general en Kubernetes, tiene un retardo, así que cuando realicemos la carga de trabajo tomará varios segundos `~1min` antes de que esa carga se vea reflejada en el monitoreo y como el auto-scaler se basa en dichas métricas pues hasta ese momento comenzará a contar el tiempo de excedido/bajada de utilización.
+
+También podemos saber cuanto están usando de recursos los Nodos, en el case de Minikube es un solo nodo virtual, que nos dice el uso de CPU tanto en Cores como en porcentaje del asignado y de la RAM en MB y en porcentaje del asignado:
+```bash
+kubectl top node
+```
+
+Podemos saber cuantos recursos fueron asignados a Minikube con el siguiente comando, en las entradas `"cpu"` y `"memory"`, también podemos ver el máximo número de Pods en la entrada `"pods"`:
+```bash
+kubectl get nodes -o jsonpath='{.items[0].status.allocatable}'
+```
+
+Recordemos que podemos especificarle recursos a Minikube al momento de iniciarlo la primera vez, pero antes hay que detener el cluster y eliminarlo, **pero con precaución ya que se perderán los Persistent Volumes, primero hay que respaldar si es que tenemos información importante**:
+* Detenemos el cluster y lo eliminamos:
+    ```bash
+    minikube stop
+    minikube delete
+    ```
+* Iniciamos la máquina virtual con los nuevos recursos:
+    ```bash
+    minikube start --cpus=<cpus> --memory=<MB>
+    # Ejemplo
+    minikube start --cpus=4 --memory=2048
+    ```
+* `Importante`: Si estamos en Windows y el driver del cluster es `docker` (ver con `minikube profile list`) hay un error conocido que impide que se respeten las configuraciones nuevas del cluster, yo intenté varias opciones para eliminar la VM y crearla de nuevo pero ninguna me funcionó.
+
 
 ### Ejmplo práctico y completo para un Deployment con almacenamiento persistente para MySQL
 
