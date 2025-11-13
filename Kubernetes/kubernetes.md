@@ -876,8 +876,6 @@ kubectl apply -f <file>.yaml
 kubectl delete -f <file>.yaml
 ```
 
-### 
-
 **⚠️ Importante**: si especificamos un directorio en lugar de un archivo YAML, entonces se aplicarán todos los archivos YAML que se encuentren en el directorio.
 
 ## Como hacer uso de una app levantada con un deployment
