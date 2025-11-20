@@ -12,6 +12,8 @@ La arquitectura funciona básicamente de la siguiente forma:
 * Un servidor de Celery, que implementa y ejecuta las tareas asíncronas.
 * Un servidor de Django, que ejecuta la aplicación web que solicita la ejecución de tareas asíncronas.
 
+**⚠️ Importante**: como la comunicación con Celery nunca es directa sino a través de Redis, entonces no necesitamos exponer el servidor de Celery ni siquiera dentro de la red, es suficiente con que el servidor de Redis esté expuesto y que sea accesible por el servidor de Celery y de Django.
+
 ## Integración de Celery en Django
 
 Lo principal es asegurarnos de levantar el servidor con Celery con las tareas que puede ejecutar. Por fortuna Celery provee mecanismos para facilitar este proceso incluyendo en apps con Django.
@@ -85,7 +87,7 @@ import time
 
 @shared_task
 def sumar(a, b):
-    time.sleep(2)
+    time.sleep(3) # Simular una tarea pesada
     return a + b
 ```
 
@@ -119,5 +121,6 @@ Para completar el flujo de trabajo Django-Celery y poder hacer uso de tareas as�
 * Implementamos las taréas asíncronas (funciones) en los archivos `tasks.py` de cada app del proyecto, decoradas con `@shared_task`, para que sean registradas por Celery.
 * Hacemos uso de dichas funciones en nuestras vistas, pero mediante el atributo `delay` (como `sumar.delay(2, 10)`), para por ejemplo procesar un video (bajar un poco la calidad), procesar una imagen (generar thumbnails), o enviar un email, etc.
 
+**⚠️ Importante**: si solo invocamos la función como `sumar(2, 10)`, entonces se esperará a que termine la ejecución, para que el programa continúe sin esperar el resultado tiene que ser mediante `sumar.delay(2, 10)`.
 
 
