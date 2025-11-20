@@ -1,0 +1,1 @@
+Mejora la redacción y corrige errores del archivo abierto
