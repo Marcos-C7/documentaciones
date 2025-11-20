@@ -1,4 +1,5 @@
 En este archivo vacío quiero generar una documentación para mí mismo de Redis en Django. Que el contenido tenga amplia explicación, principalmente en la funcionalidad interna, que sección tenga códigos de ejemplo, descripción precisa de variables o identificadores usados en el código, tips, advertencias, solución de problemas. A continuación te doy el índice en forma de objeto JSON que describe la estructura del documento: 
+```json
 {
     "title": "Redis en Django",
     "content": "Describir la motivación detrás de esta tecnología, por que usarla, que ventajas ofrece, que desventajas, que problemas puede generar",
@@ -31,3 +32,4 @@ En este archivo vacío quiero generar una documentación para mí mismo de Redis
         }
     ]
 }
+```
