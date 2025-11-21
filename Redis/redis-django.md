@@ -65,36 +65,73 @@ pip install django-redis
 
 ### Configuración (`settings.py`)
 
-Django usa el sistema de `CACHES` para configurar la conexión.
+Django permite configurar diferentes mecanismos para manejar la caché y el mecanismo recomendado es Redis. A continuación vemos como configurar Django para que use el servidor de Redis como sistema de Caché y también para que maneje las sesiones de usuarios mediante la caché seleccionada (que será Redis).
 
 ```python
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": "redis://127.0.0.1:6379/1", # redis://host:port/db_number
+        # Ubiación del servidor 'redis://<host>:6379/1' o servidores 'redis://<host1>:6379/1;redis://<host2>:6379/1'
+        "LOCATION": "redis://127.0.0.1:6379/1", 
         "OPTIONS": {
+            # Hay varias pero 'DefaultClient' funciona en el 99% de los casos
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            "PARSER_CLASS": "redis.connection.HiredisParser", # Opcional: más rápido (requiere instalar hiredis)
-            "CONNECTION_POOL_KWARGS": {"max_connections": 100},
-            "SOCKET_CONNECT_TIMEOUT": 5,  # Segundos
-            "SOCKET_TIMEOUT": 5,          # Segundos
+            # Prefijo para evitar choques entre varias aplicaciones Django
+            "KEY_PREFIX": "myapp"
+            # En caso de que el servidor tenga contraseña y sea la misma en todos los servidores especificados
+            "PASSWORD": "password"
+            # Segundos para conectar (util en caso se caida del servidor Redis)
+            "SOCKET_CONNECT_TIMEOUT": 3,
+            # Timeout de operaciones (util en caso se caida del servidor Redis)
+            "SOCKET_TIMEOUT": 3,
+            # Algoritmo de compresión para datos grandes 
+            "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
+            # Tamaño minimo para aplicar compresión
+            "COMPRESS_MIN_LEN": 500,
+            # Útil definor como 'True' en producción si Redis no es crítico
+            "IGNORE_EXCEPTIONS": True,
+            # Opciones del pool de conexiones
+            "CONNECTION_POOL_KWARGS": {
+                # Máximo de conexiones abiertas en el pool
+                "max_connections": 100,
+                # Reintentar la operación si llega al timeout definido
+                "retry_on_timeout": True,
+            }
         }
     }
 }
+```
 
+Notas sobre algunas configuraciones:
+* `LOCATION`: ubicación del servidor Redis, la sintaxis general es `redis://[:<password>@]<redis-host>:<port>/<db-number>`, lo recomendado por Django es usar la base de datos `1` para caché.
+    * Si el servidor está corriendo en un contenedor o servicio podemos usar el nombre: `redis://redis:6379/1`.
+    * Podemos indicar varios servidores Redis separados por punto y coma, por ejemplo: `redis://redis1:6379/1;redis://redis2:6379/1`.
+    * En caso de usar varios servidores, si todos usan la misma contraseña podemos especificarla en el parámetro `OPTIONS.PASSWORD`, si son diferentes entonces ponemos la contraseña en cada servidor en `LOCATION`.
+
+#### Parser de datos
+
+⚠️ Django convierte los objetos de Python en strings antes de guardarlos en Redis y para esto usa Parsers. El mejor Parser por su velocidad es `hiredis`, que está implementado en `C` y para habiliarlo solo hay que instalarlo (`pip install hiredis`). El cliente de Django-Redis lo detectará y seleccionará automáticamente.
+
+Para revisar cual parser se está usando podemos ejecutar lo siguiente:
+```bash
+python manage.py shell
+```
+```python
+import redis
+r = redis.Redis()
+cls = r.connection_pool.connection_class()._parser
+print(cls)
+```
+
+#### Sesiones de usuarios con Redis
+
+También podemos configurar Django en los `settings.py` para que maneje las sesiones de usuarios mediante la caché seleccionada, que será Redis en este caso.
+
+```python
 # Usar Redis para guardar sesiones (Opcional pero recomendado)
 SESSION_ENGINE = "django.contrib.sessions.backends.cache"
 SESSION_CACHE_ALIAS = "default"
 ```
-
-#### Desglose de Configuración
-*   **BACKEND**: `django_redis.cache.RedisCache` es el motor que traduce la API de caché de Django a comandos de Redis.
-*   **LOCATION**: La URL de conexión. El número final (`/1`) es la base de datos lógica de Redis (0-15).
-    *   *Tip*: Usa bases de datos diferentes para Cache y Celery para evitar colisiones o borrados accidentales (`FLUSHDB`).
-*   **CLIENT_CLASS**:
-    *   `DefaultClient`: Cliente estándar.
-    *   `ShardClient`: Para distribuir claves entre múltiples servidores Redis (sharding).
-*   **CONNECTION_POOL**: `django-redis` usa un pool de conexiones automáticamente. Esto evita el costo de crear/cerrar sockets TCP en cada operación.
 
 ---
 
