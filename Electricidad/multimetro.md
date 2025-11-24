@@ -5,17 +5,7 @@ Un multímetro (o polímetro) es un instrumento de medición eléctrica portáti
 
 Los multímetros modernos son digitales (DMM - Digital Multimeter), mostrando los valores en una pantalla numérica, aunque todavía existen análogos con aguja. Internamente, un multímetro digital es esencialmente un voltímetro digital con circuitos adicionales para convertir otras magnitudes (corriente, resistencia) en voltaje que el convertidor analógico-digital (ADC) pueda leer.
 
-### Partes Principales
-1.  **Pantalla (Display):** Muestra la lectura, unidades y símbolos de advertencia.
-2.  **Selector (Dial):** Rueda giratoria para seleccionar la función y el rango.
-3.  **Puertos (Jacks):**
-    *   **COM (Común):** Siempre se conecta la punta negra (negativo/tierra).
-    *   **VΩmA:** Para medir voltaje, resistencia y corrientes pequeñas (punta roja).
-    *   **10A / 20A:** Puerto exclusivo para medir corrientes grandes (punta roja). Sin fusible o con fusible de alta capacidad.
-
----
-
-## Simbología Común
+La corriente eléctrica se divide en dos tipos, Corriente Directa (DC ⎓) y Corriente Alterna (AC ~), ambas se pueden medir con el mismo multímetro solamente usando el símbolo correcto, como se describe en la siguiente tabla:
 
 | Símbolo | Significado | Descripción |
 | :--- | :--- | :--- |
@@ -30,6 +20,18 @@ Los multímetros modernos son digitales (DMM - Digital Multimeter), mostrando lo
 | **Hz** | Frecuencia | Mide ciclos por segundo. |
 | **HOLD** | Retención de datos | Congela el valor en pantalla. |
 | **REL** | Medición Relativa | Establece el valor actual como cero y mide la diferencia. |
+
+**Notas**:
+* La corriente alterna se encuentra por ejemplo en el hogar.
+* La corriente directa se encuentra por ejemplo en baterías como la del automóvil.
+
+### Partes Principales
+1.  **Pantalla (Display):** Muestra la lectura, unidades y símbolos de advertencia.
+2.  **Selector (Dial):** Rueda giratoria para seleccionar la función y el rango.
+3.  **Puertos (Jacks):**
+    *   **COM (Común):** Siempre se conecta la punta negra (negativo/tierra).
+    *   **VΩmA:** Para medir voltaje, resistencia y corrientes pequeñas (punta roja).
+    *   **10A / 20A:** Puerto exclusivo para medir corrientes grandes (punta roja). Sin fusible o con fusible de alta capacidad.
 
 ---
 
