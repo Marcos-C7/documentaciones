@@ -17,6 +17,8 @@ kubectl apply -f https://raw.githubusercontent.com/traefik/traefik/v3.6/docs/con
 
 ⚠️ Asegurarnos de especificar la misma versión en la URL de los CRDs que la que usamos para instalar el Ingress Controller de Traefik.
 
+Los CRDs son globales, así que si los instalas se quedan de por vida hasta que los elimines manualmente.
+
 Los CRDs incluyen un recurso llamado `IngressRoute`, que está creado para usarse en lugar del recurso `Ingress` estándar. 
 
 En el siguiente ejemplo que usa un Ingress estándar para configurar el ruteo de Traefik Ingress-Controller, bajo el dominio `dev.localhost`, redirige el tráfico hacia el Service `nginx` si la ruta comienza con `/static/` o `/media/` y a un Service ``django` todo lo demás:
@@ -85,4 +87,40 @@ spec:
         - name: django
           port: 8000
 ```
+
+## Hoja de ayuda
+
+A continuación se enlistan comandos útiles para trabajar con CRDs:
+
+* Ver todos los CRDs del cluster:
+    ```bash
+    kubectl get crds
+    ```
+    Formato de salida
+    ```
+    NAME                                  CREATED AT
+    ingressroutes.traefik.io              2026-01-09T22:22:52Z
+    middlewares.traefik.io                2026-01-09T22:22:52Z
+    ```
+* Ver la definición completa de un CRD:
+    ```bash
+    kubectl describe crd <crd-fullname>
+    kubectl describe crd ingressroutes.traefik.io
+    ```
+* Ver las instancias creadas de un CRD:
+    ```bash
+    kubectl get <crd-shortname> -A
+    kubectl get ingressroutes -A
+    kubectl get middlewares -A
+    ```
+* Eliminar las instancias de un CRD:
+    ```bash
+    kubectl delete <crd-shortname> --all -A
+    kubectl delete ingressroutes --all -A
+    ```
+* Eliminar el CRD:
+    ```bash
+    kubectl delete crd <crd-fullname>
+    kubectl delete crd ingressroutes.traefik.io
+    ```
 
