@@ -153,7 +153,9 @@ Un Component debe cumplir:
 * No se deben mover entre versiones.
 * Si cambias cosas drásticamente → Cambias el GUID del component.
 
-**Nota**: podemos generar GUIDs con la librería estándar de Python `uuid` mediante `uuid.uuid4()`.
+**Nota**: podemos generar GUIDs de dos formas:
+* La más sencilla es con el comando `new-guid` en Powershell.
+* Otra es con la librería estándar de Python `uuid` mediante `uuid.uuid4()`.
 
 ### Feature
 
