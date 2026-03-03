@@ -33,6 +33,49 @@ Flujo conceptual de funcionamiento:
 * **Optimizaciones**: Cuantización (reducir precisión de números para ahorrar memoria, e.g., de 32-bit a 8-bit) o LoRA (adaptadores que modifican modelos sin reentrenar todo).
 * **Ejecución**: En el PC, el backend envía datos a GPU, computa y devuelve resultado. Todo local: no sale de la máquina.
 
+## Optimizaciones
+
+### Cuantización
+
+Los modelos originales se entrenan en alta precisión (FP16~16 bits por parámetro e incluso FP32), cada parámetro es un número flotante. Un modelo de `8B` (8 billones) de parámetros necesita ~16 GB solo para los pesos que corresponden a cada parámetro.
+
+La cuantización reduce la precisión de los parámetros a menor tamaño, dependiendo del propósito del modelo, pueden ser reducidos 8, 5, 4, 3 e incluso 2 bits por parámetro, lo cual reduce el tamaño del modelo sutancialmente para poder ejecutarse con menos memoria.
+
+Con esto tenemos modelos más ligeros, más rápidos, pero con menos calidad como respuestas menos coherentes, más errores en razonamiento complejo, repeticiones, etc. La cuantización es weight-only (solo pesos del modelo; el KV cache suele quedar en FP16 o Q8 para no perder contexto)
+
+En 2026, las cuantizaciones modernas (especialmente en formato GGUF de llama.cpp) son tan buenas que un modelo cuantizado a 4-5 bits puede ser casi indistinguible del original en la mayoría de tareas cotidianas (chat, código simple, escritura). 
+
+El formato GGUF es muy usado en modelos para Llama.cpp, ollama, LM Studio, KoboldCPP y otros. Otros formatos como GPTQ/AWQ/EXL2 existen (más para GPU Nvidia), pero GGUF es el rey para compatibilidad amplia (CPU, AMD, Apple, Nvidia).
+
+Idea superficial de la cuantización: en la cuantización tradicional no se cuantiza peso por peso, sino que se agrupan los pesos en bloques (eg, de 32, 64, 256 pesos), a cada bloque se le calcula una escala y posiblemente un zero-point para mapear los valores flotantes originales a enteros de pocos bits. A veces se aplica otra cuantización sobre la cuantización para un mayor ahorro. Hay cuantizaciones modernas (K-quants) que usan estructuras jerárquicas para una cuantización no uniforme en tamaño de bits y mezclas de pesos inteligente por tensor.
+
+Las notaciones generales de cuantización son  `Q<N>_K_<S/M/L>` o `IQ<N>_<XXS/XS/S/M>` o legacy como `Q4_0`:
+
+* `Q`: modelo cunatizado.
+* `N`: número de bits base por peso, aunque no es exacto en métodos no uniformes como `K-quants`.
+* `_K`: indica que está usando la cuantización moderna `K-quants`, lo recomendado es usar esta cuantizaicón.
+* `S/M/L` (solo para `K-quants`): indica el nivel de mezcla o precisión selectiva:
+    * `S` (Small) para un menor tamaño pero más pérdida de calidad.
+    * `M` (Medium) balance ideal con mucho mejor calidad por un poco más de tamaño.
+    * `L` (Large) menos común con mejor calidad pero mucho mayor peso.
+* `IQ` (I-Quants, más nuevos): Mejores en bits muy bajos (IQ3_XXS, IQ4_XS). A veces superan a K-quants equivalentes en calidad por bit, pero más sensibles a cómo se cuantizó.
+* `_0` o `_1` (legacy): Métodos antiguos sin `K` (peor calidad al mismo tamaño → evitar si es posible).
+
+Ejemplos:
+
+* `Q8_0`: Bits por peso ~8.5, tamaño total ~7-8 GB, VRAM necesaria ~7-8 GB (legacy, evitar los que no tengan K).
+* `Q5_K_S`: Bits por peso ~5.3-5.5, tamaño total ~4.3-4.8 GB, VRAM necesaria ~5 GB
+* `Q5_K_M`: Bits por peso ~5.5-5.7, tamaño total ~4.5-5 GB, VRAM necesaria ~5-6 GB.
+
+**Punto importante**: Muchos creadores de cuantizaciones (TheBloke, city96, etc.) usan imatrix (importance matrix) durante la cuantización → mejora drásticamente la calidad en Q3/Q4/Q5 (reduce pérdida en ~20-50%). Si es posible usa versiones con "imatrix" o "imat". Busca "TheBloke" o "bartowski" para buenas cuantizaciones.
+
+
+
+
+
+
+
+
 ## Advertencias
 
 * No sobrecargar la GPU sin monitorear temperaturas; usa herramientas como MSI Afterburner para vigilar.
