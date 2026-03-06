@@ -70,11 +70,103 @@ Ejemplos:
 **Punto importante**: Muchos creadores de cuantizaciones (TheBloke, city96, etc.) usan imatrix (importance matrix) durante la cuantización → mejora drásticamente la calidad en Q3/Q4/Q5 (reduce pérdida en ~20-50%). Si es posible usa versiones con "imatrix" o "imat". Busca "TheBloke" o "bartowski" para buenas cuantizaciones.
 
 
+## MoE (Mixture of Experts)
 
+Esta es una técnica moderna que se está implementando en los modelos más recientes para incrementar la velocidad de las respuestas. Un modelo se compone de varias capas para pocesar los tokens y MoE, en lugar de usar una sola red muy densa para cada capa, la descopone en sub-redes independientes llamados **expertos**. Una red pequeña (router) se encarga de determinar cuales son los expertos relacionados con el token para que solo esos procesen el token, en lugar de toda la capa entera.
 
+Con esto se pueden obtener respuestas más rápido sin perder calidad, aunque que el modelo al final se tiene que cargar completamente en memoria.
 
+## System prompt
 
+También conocido como *instrucción incial*, el **system prompt** es un prompt especial que se le envía al modelo para definir el rol, el comportamiento, las reglas y el estilo general que el modelo debe seguir en toda la conversación.
 
+Es como darle una identidad al modelo que le describe como debe comportarse en toda la conversación.
+
+Los LLM (Large Language Model) son modelos en blanco que saben mucho pero no saben como comportarse en una conversación específica (amigable, grosero, experto en un tema, censurado, etc). El system prompt resuelve esto dándole una dirección al modelo para la conversación e impoiendo reglas y/o restricciones. De esta forma el modelo es consistente seguro y útil.
+
+Sin un buen system prompt el modelo puede ser muy inconsistente, ambiguo, ser muy genérico o alucinar. En cambio con un buen system prompt podemos orientar al modelo para que se comporte como un experto en Python que siempre de código limpio, ser un profesor muy paciente, ser un personaje muy serio, etc.
+
+La entrada completa que ve el modelo tiene la siguiente forma:
+
+```txt
+[System prompt]  ← Esto va primero
+[Prompt 1]
+[Respuesta 1]
+[Prompt 2]
+[Respuesta 2]
+...
+[Prompt actual]
+```
+
+El system prompt debe ser una instrucción de alto nivel, rol, reglas generales. Se define una vez (o por sesión) y afecta todo.
+
+Cada modelo suele tener un system prompt por defecto muy genérico como el siguiente, pero podemos definir uno personalizado mediante los mecanismos de la herramienta que estemos utilizando (Ollama, LM Studio, etc): 
+```
+You are a helpful, smart, kind, and efficient AI assistant.
+```
+
+Es muy importante especificar un system prompt para sacar el máximo provecho a las conversaciones.
+
+### Ejemplos de system prompt
+
+Para asignarle un rol:
+```
+Eres un asistente matemático preciso y conciso. Siempre explicas paso a paso y usas LaTeX para fórmulas.
+```
+
+Para código:
+```
+Eres un programador senior en Python. Siempre das código limpio, comentado, con type hints y sigues PEP 8. Si hay errores, los señalas primero.
+```
+
+Para evitar alucinaciones:
+```
+Responde solo con hechos verificables. Si no sabes algo, di 'No tengo información suficiente' en lugar de inventar.
+```
+
+## KV Cache
+
+Como el KV cache almacena matrices relacionadas con tokens, entonces este se suele especificar en tokens, por ejemplo, se dice que un modelo tiene KV cache para 8k tokens. También se le llama **contexto** y se dice por ejemplo que un modelo tiene un contexto para 8k tokens.
+
+En este mecanismo se involucran las siguientes partes: los tokens, las cabezas de atención (*head attention*) y las capas del modelo.
+
+Para la generación de tokens, a cada token se le calculan las siguientes 3 matrices, para cada cabeza, es por eso que la KV cache ocupa mucho espacio:
+
+* **Query (Q)**: lo que "pregunta" el token actual.
+* **Key (K)**: las "claves" con las que se compara.
+* **Value (V)**: los valores que se ponderan según la similitud.
+
+La salida se genera token por token, y para cada token nuevo se le calcula la **atención** (*self-attention*), la cual se calcula a partir de todas las matrices `K, V, M` que estén en el contexto (toda la conversación).
+
+Para no estar recalculando las matrices `K, V, M` en cada token nuevo, mejor se guardan en cache y a esto se le llama **KV Cache (contexto)**.
+
+El contexto incluye al system prompt y todo el historial de prompts y respuestas, es por eso que una conversación con un chat de IA tiene coherencia y fluidez:
+
+* En la primera interacción primero se incluye el system prompt y el primer prompt del usuario. 
+* Se genera la primera respuesta usando como contexto `system-prompt + user-prompt-1` y lo que se va generando también se va agregando al contexto.
+* En el segundo prompt del usuario se inicia con `system-prompt + user-prompt-1 + resp-1 + user-prompt-1` en el contexto y se va agregando lo que se va generando.
+* Y así sucesivamente.
+
+El problema es que la matrices `Q, K, V` son un poco grandes y hay una para cada token/cabeza de atención/capa del modelo y eso requiere mucha memoria. 
+
+Al enviar un prompt al modelo ocurre lo siguiente, en términos de KV cache:
+
+* Se calculan las matrices `Q, K, V` de los tokens del nuevo prompt y se agregan al contexto.
+* Para cada token que será generado se le calculan sus `Q, K, V` que son agregadas al contexto, luego se calcula la atención usando las todas las matrices `Q, K, V` de todo el contexto y con esta se genera el token nuevo.
+
+Si la conversación excede el tamaño del contexto ocurre un error de memoria (OOM) o en herramientas como Ollama solo se trunca el contexto manteniendo el system prompt intacto y solo lo último de la conversación.
+
+### Configuración de KV cache
+
+Parece que todos los modelos soportan ajustes de tamaño en el KV cache (contexto) mediante parámetros que se especifican al iniciar el modelo. 
+
+```bash
+ollama run llama3.1:8b --ctx-size 32768
+# Con cuantizacíón
+ollama run llama3.1:8b --ctx-size 32768 --kv-quant q8_0
+```
+
+Algunas herramientas como Ollama ajustan un valor automáticamente dependiendo de la VRAM disponible.
 
 ## Advertencias
 

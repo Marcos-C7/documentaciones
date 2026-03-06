@@ -36,7 +36,7 @@ print(response.choices[0].message.content)
 ```
 
 
-# Comandos
+# Comandos CLI
 
 * `ollama pull <modelo>`: descarga un modelo sin correrlo.
 * `ollama run <modelo>`: ejecuta un modelo, descargandolo si no está descargado.
@@ -44,10 +44,35 @@ print(response.choices[0].message.content)
 * `ollama list`: lista los modelos descargados.
 * `ollama ps`: modelos corriendo ahora.
 * `ollama stop <modelo>`: detener un modelo.
+
+# Comandos de chat
+
 * `/bye` para salir de un chat en modo CLI.
+* `/set system "<system-prompt>"`: definir un system prompt para el modelo.
 
 # WebUI
 
 Ollama es CLI por defecto, pero hay herramientas que integran un interfaz de usuario (UI). Auí veremos como usar WebUI que es la más popular.
 
 Para esto usaremos docker
+
+
+# Procedimientos
+
+## Ajustar el system prompt
+
+Se puede hacer desde un comando de chat:
+```bash
+/set system "<system-prompt>"
+```
+
+O en el Modelfile, por ejemplo:
+
+```docker
+FROM llama3.1:8b
+SYSTEM Eres un profesor de programación Python estricto pero paciente. Corriges errores con explicación clara y das ejemplos reales. Responde solo en español.
+PARAMETER temperature 0.7
+PARAMETER num_ctx 8192
+```
+
+Tambien se puede hacer en interfaces UI como WebUI mediante los ajustes del chat.
