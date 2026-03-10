@@ -44,6 +44,7 @@ print(response.choices[0].message.content)
 * `ollama list`: lista los modelos descargados.
 * `ollama ps`: modelos corriendo ahora.
 * `ollama stop <modelo>`: detener un modelo.
+* `ollama show <modelo> --modelfile`: mostrar el modelfile original del modelo.
 
 # Comandos de chat
 
@@ -54,7 +55,11 @@ print(response.choices[0].message.content)
 
 Ollama es CLI por defecto, pero hay herramientas que integran un interfaz de usuario (UI). Auí veremos como usar WebUI que es la más popular.
 
-Para esto usaremos docker
+Para esto usaremos docker, levantando la imágen de WebUI en un contenedor:
+
+```bash
+docker run -d -p 3000:8080 --add-host=host.docker.internal:host-gateway -v open-webui:/app/backend/data --name open-webui --restart always ghcr.io/open-webui/open-webui:main
+```
 
 
 # Procedimientos
