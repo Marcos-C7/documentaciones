@@ -73,7 +73,7 @@ Donde:
   * `-t, --tag`: para asignar un nombre y una etiqueta opcional a la imagen, por ejemplo `-t mi_app:latest`, o también `-t mi_app:2.0`.
   * `-f, --file`: para indicar la ruta de un archivo dockerfile específico.
   * `--build-arg`: para definir variables que podrán ser usadas en el archivo dockerfile, con el formato `KEY=VALUE`. Por ejemplo `--build-arg PYVERSION=3.11`.
-  * `--no-cache`: para no construir desde cero sin usar el cache.
+  * `--no-cache`: para construir desde cero sin usar el cache.
   * `--pull`: forzar a jalar siempre la versión más reciente de la imagen base.
   * `--progress`: tipo de informe de progreso `auto, plain, tty o json`.
 
@@ -110,7 +110,7 @@ Donde:
   * `--name`: para asignar un nombre al contenedor, ej. `--name mi_contenedor`.
   * `-p, --publish`: publica o mapea puertos en el host del contenedor en formato `[ip:]puerto_host:puerto_contenedor` donde la IP es opcional, ej. `-p 8080:8000` o `-p 127.0.0.1:8080:8000`. Creo que podemos usar la IP de cualquier máquina a la que le queramos dar acceso al puerto del contenedor. Podemos mapear tantos puertos como queramos usando varias veces la opción `-p`, ej. `-p 8080:8000 -p 3036:3036`.
     * Importante: Si solo especificamos el puerto, entonces dicho puerto queda accesible para todo el mundo, lo cual es inseguro. Lo mejor es especificar la IP local para que solo el host tenga acceso al puerto del contenedor, ej. `-p 127.0.0.1:8080:8000`.
-  * `-v, --volume`: monta un directorio desde el host al contenedor con el formato `ruta/host:ruta/contenedor`. La ruta del host puede ser relativa o absoluta, pero la del contenedor debe ser absoluta. Podemos montar el mismo directorio en varios contenedores para compartir almacenamiento. Al ser un volument montado, todo lo que se genere en este directorio será persistente. Lo recomendable es apegarse a la convensión de los archivos de sitema del sistema operativo, como usar `/data` para montar volúmenes donde almacenar bases de datos, logs, archivos estáticos, etc.
+  * `-v, --volume`: monta un directorio desde el host al contenedor con el formato `ruta/host:/ruta/contenedor`. La ruta del host puede ser relativa o absoluta, pero la del contenedor debe ser absoluta. Podemos montar el mismo directorio en varios contenedores para compartir almacenamiento. Al ser un volument montado, todo lo que se genere en este directorio será persistente. Lo recomendable es apegarse a la convensión de los archivos de sitema del sistema operativo, como usar `/data` para montar volúmenes donde almacenar bases de datos, logs, archivos estáticos, etc.
   * `--rm`: eliminar el contenedor automáticamente cuando sea detenido.
   * `-e, --env`: establecer variables de entorno dentro del contenedor en formato `KEY=VALUE`.
   * `--env-file`: para indicar las variables de entorno que serán pasadas al contenedor, desde un archivo, con cada variable en una linea con el formato `KEY=VALUE`, ej. `--env-file ruta/env_file.env`.
